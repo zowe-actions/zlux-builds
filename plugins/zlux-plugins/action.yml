@@ -19,9 +19,8 @@ runs:
         mkdir zlux
         cp -rf $REPOSITORY_NAME zlux/
         cd zlux
-        ls
         git clone https://github.com/zowe/zlux-app-manager.git -b $DEFAULT_PLUGIN_BRANCH
-        git clone https://github.com/zowe/zlux-platform.git -b $DEFAULT_PLUGIN_BRANCH
+        git clone https://github.com/zowe/zlux-platform.git -b bugfix/renameOpenFile
         git clone https://github.com/zowe/zlux-build.git -b $DEFAULT_PLUGIN_BRANCH
         if ${{ inputs.build-zss }}
         then 
