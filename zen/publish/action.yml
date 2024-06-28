@@ -4,6 +4,9 @@ inputs:
   os:
     description: 'os'
     required: true
+  perform-release:
+    description: 'perform-release'
+    required: true
 
 runs:
   using: "composite"
@@ -36,27 +39,33 @@ runs:
       
     - name: 'publish'
       run: |
-        ARTIFACTORY_REPO=libs-snapshot-local/org/zowe
         TIMESTAMP=`date +%Y%m%d.%H%M%S`
+        if [ "$input.release" = true ]; then
+          ARTIFACTORY_REPO=libs-release-local/org/zowe/${REPOSITORY_NAME}/${ZEN_VERSION}
+        elif [ "${{ inputs.os }}" = "macos" ];
+          ARTIFACTORY_REPO=libs-snapshot-local/org/zowe/${REPOSITORY_NAME}/${ZEN_VERSION}-${CURRENT_BRANCH:u}-${JFROG_CLI_BUILD_NUMBER}
+        else
+          ARTIFACTORY_REPO=libs-snapshot-local/org/zowe/${REPOSITORY_NAME}/${ZEN_VERSION}-${CURRENT_BRANCH^^}-${JFROG_CLI_BUILD_NUMBER}
+        fi
         cd out/make
         if [ "${{ inputs.os }}" = "windows" ];
         then
           cd squirrel.windows/x64
-          jfrog rt u zowe_install_wizard-${ZEN_VERSION}-full.nupkg ${ARTIFACTORY_REPO}/${REPOSITORY_NAME}/${ZEN_VERSION}-${CURRENT_BRANCH^^}-${JFROG_CLI_BUILD_NUMBER}/windows/zowe_install_wizard-${ZEN_VERSION}-full.nupkg
-          jfrog rt u zowe-install-wizard-${ZEN_VERSION}\ Setup.exe ${ARTIFACTORY_REPO}/${REPOSITORY_NAME}/${ZEN_VERSION}-${CURRENT_BRANCH^^}-${JFROG_CLI_BUILD_NUMBER}/windows/zowe-install-wizard-${ZEN_VERSION}\ Setup.exe
-          echo "${ARTIFACTORY_REPO}/${REPOSITORY_NAME}/${ZEN_VERSION}-${CURRENT_BRANCH^^}-${JFROG_CLI_BUILD_NUMBER}/windows/zowe_install_wizard-${ZEN_VERSION}-full.nupkg"
-          echo "${ARTIFACTORY_REPO}/${REPOSITORY_NAME}/${ZEN_VERSION}-${CURRENT_BRANCH^^}-${JFROG_CLI_BUILD_NUMBER}/windows/zowe-install-wizard-${ZEN_VERSION}\ Setup.exe"
+          jfrog rt u zowe_install_wizard-${ZEN_VERSION}-full.nupkg ${ARTIFACTORY_REPO}/windows/zowe_install_wizard-${ZEN_VERSION}-full.nupkg
+          jfrog rt u zowe-install-wizard-${ZEN_VERSION}\ Setup.exe ${ARTIFACTORY_REPO}/windows/zowe-install-wizard-${ZEN_VERSION}\ Setup.exe
+          echo "${ARTIFACTORY_REPO}/windows/zowe_install_wizard-${ZEN_VERSION}-full.nupkg"
+          echo "${ARTIFACTORY_REPO}/windows/zowe-install-wizard-${ZEN_VERSION}\ Setup.exe"
         elif [ "${{ inputs.os }}" = "macos" ];
         then
-          jfrog rt u zowe-install-wizard-${ZEN_VERSION}-arm64.dmg ${ARTIFACTORY_REPO}/${REPOSITORY_NAME}/${ZEN_VERSION}-${CURRENT_BRANCH:u}-${JFROG_CLI_BUILD_NUMBER}/mac/zowe-install-wizard-${ZEN_VERSION}-arm64.dmg
-          echo "${ARTIFACTORY_REPO}/${REPOSITORY_NAME}/${ZEN_VERSION}-${CURRENT_BRANCH:u}-${JFROG_CLI_BUILD_NUMBER}/mac/zowe-install-wizard-${ZEN_VERSION}-arm64.dmg"
+          jfrog rt u zowe-install-wizard-${ZEN_VERSION}-arm64.dmg ${ARTIFACTORY_REPO}/mac/zowe-install-wizard-${ZEN_VERSION}-arm64.dmg
+          echo "${ARTIFACTORY_REPO}/mac/zowe-install-wizard-${ZEN_VERSION}-arm64.dmg"
         elif [ "${{ inputs.os }}" = "ubuntu" ];
         then
           cd deb/x64
-          jfrog rt u zowe-install-wizard_${ZEN_VERSION}_amd64.deb ${ARTIFACTORY_REPO}/${REPOSITORY_NAME}/${ZEN_VERSION}-${CURRENT_BRANCH^^}-${JFROG_CLI_BUILD_NUMBER}/unix/zowe-install-wizard_${ZEN_VERSION}_amd64.deb
-          echo "${ARTIFACTORY_REPO}/${REPOSITORY_NAME}/${ZEN_VERSION}-${CURRENT_BRANCH^^}-${JFROG_CLI_BUILD_NUMBER}/unix/zowe-install-wizard_${ZEN_VERSION}_amd64.deb"
+          jfrog rt u zowe-install-wizard_${ZEN_VERSION}_amd64.deb ${ARTIFACTORY_REPO}/unix/zowe-install-wizard_${ZEN_VERSION}_amd64.deb
+          echo "${ARTIFACTORY_REPO}/unix/zowe-install-wizard_${ZEN_VERSION}_amd64.deb"
           cd ../../rpm/x64
-          jfrog rt u zowe-install-wizard-${ZEN_VERSION}-1.x86_64.rpm ${ARTIFACTORY_REPO}/${REPOSITORY_NAME}/${ZEN_VERSION}-${CURRENT_BRANCH^^}-${JFROG_CLI_BUILD_NUMBER}/unix/zowe-install-wizard-${ZEN_VERSION}-1.x86_64.rpm
-          echo "${ARTIFACTORY_REPO}/${REPOSITORY_NAME}/${ZEN_VERSION}-${CURRENT_BRANCH^^}-${JFROG_CLI_BUILD_NUMBER}/unix/zowe-install-wizard-${ZEN_VERSION}-1.x86_64.rpm"
+          jfrog rt u zowe-install-wizard-${ZEN_VERSION}-1.x86_64.rpm ${ARTIFACTORY_REPO}/unix/zowe-install-wizard-${ZEN_VERSION}-1.x86_64.rpm
+          echo "${ARTIFACTORY_REPO}/unix/zowe-install-wizard-${ZEN_VERSION}-1.x86_64.rpm"
         fi
       shell: bash

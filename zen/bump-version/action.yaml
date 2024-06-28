@@ -1,0 +1,26 @@
+name: "Bump Zen version"
+description: "Bump zen version"
+inputs:
+  branch-name:
+    description: 'the default branch'
+    required: false
+  version:
+    description: 'which version level needed to bump version, eg. npm version patch'
+    required: false
+    default: 'minor'
+
+runs:
+  using: "composite"
+  steps:
+    - name: 'process env'
+      run: |
+        echo "REPO_NAME=${{ github.event.repository.name }}" >> $GITHUB_ENV
+      shell: bash
+      
+    - name: 'run nodejs'
+      run: node 'dist/index.js' 
+      working-directory: ${{ github.action_path }}
+      env:
+        BRANCH_NAME: ${{ inputs.branch-name }}
+        VERSION: ${{ inputs.version }}
+      shell: bash
