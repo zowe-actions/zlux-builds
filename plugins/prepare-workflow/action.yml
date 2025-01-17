@@ -32,7 +32,7 @@ runs:
     - name: 'setup apt-get'
       run: |
         sudo apt-get update -y
-        sudo apt-get install -y ant-contrib tart
+        sudo apt-get install -y ant-contrib
       shell: bash
     
     - name: 'determine current branch or PR'
