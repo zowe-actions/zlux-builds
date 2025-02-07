@@ -96,7 +96,7 @@ tar xpoUf ../../zlux.tar
 cd zlux-server-framework 
 rm -rf node_modules 
 export NODE_HOME=${maristNode}
-_TAG_REDIR_ERR=txt _TAG_REDIR_IN=txt _TAG_REDIR_OUT=txt __UNTAGGED_READ_MODE=V6 PATH=${maristNode}/bin:.:/bin npm --verbose install 
+_TAG_REDIR_ERR=txt _TAG_REDIR_IN=txt _TAG_REDIR_OUT=txt __UNTAGGED_READ_MODE=V6 PATH=${maristNode}/bin:.:/bin npm --verbose install --cache /ZOWE/tmp/.npm
 cd .. 
 iconv -f iso8859-1 -t 1047 zlux-app-server/defaults/serverConfig/server.json > zlux-app-server/defaults/serverConfig/server.json.1047 
 mv zlux-app-server/defaults/serverConfig/server.json.1047 zlux-app-server/defaults/serverConfig/server.json 
