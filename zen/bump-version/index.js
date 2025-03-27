@@ -11,7 +11,7 @@ var branch = core.getInput('branch')
 var repo = actionsGithub.context.repo.owner + '/' + actionsGithub.context.repo.repo
 
 if (branch == ''){
-	branch = 'v2.x/staging'
+	branch = 'v3.x/staging'
 }
 if (version == '') {
     version = 'MINOR'
