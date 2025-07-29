@@ -107,7 +107,7 @@ runs:
           cat version.properties
           cd ../zlux-app-server
           if [ -e "manifest.yaml" ]; then
-            export commit_hash=$(git rev-parse --short "$GITHUB_SHA")
+            export commit_hash=$(git rev-parse --short HEAD)
             export current_timestamp=$(date +%s%3N)
             export zlux_version="${majorVersion}.${minorVersion}.${microVersion}"
             echo $commit_hash
@@ -129,7 +129,7 @@ runs:
         for apps in $SYSTEM_APPS
         do
           cd $apps
-          export commit_hash=$(git rev-parse --short "$GITHUB_SHA")
+          export commit_hash=$(git rev-parse --short HEAD)
           export current_timestamp=$(date +%s%3N)
           sed -i -e "s|{{build\\.branch}}|${CURRENT_BRANCH}|g" \
                    -e "s|{{build\\.number}}|${JFROG_CLI_BUILD_NUMBER}|g" \
