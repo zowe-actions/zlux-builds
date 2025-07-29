@@ -67,6 +67,28 @@ runs:
         echo GITHUB_REPOSITORY=${{ github.repository }} >> $GITHUB_ENV
         echo DEPLOY_BRANCH=$CURRENT_BRANCH | sed -e 's+\/+\-+' >> $GITHUB_ENV
       shell: bash
+
+    - name: 'update build info in manifest.yaml'
+      run: |
+        cd "$GITHUB_WORKSPACE"
+        MANIFEST_PATH=manifest.yaml
+        CURRENT_BRANCH=$(git branch --show-current)
+        COMMIT_HASH=$(git rev-parse HEAD)
+        CURRENT_TIMESTAMP=$(date +%s%3N)
+        if [ -f "$MANIFEST_PATH" ]; then
+          echo "updating $MANIFEST_PATH"
+          sed -e "s|{{build\.branch}}|${CURRENT_BRANCH}|g" \
+              -e "s|{{build\.number}}|${GITHUB_RUN_NUMBER}|g" \
+              -e "s|{{build\.commitHash}}|${COMMIT_HASH}|g" \
+              -e "s|{{build\.timestamp}}|${CURRENT_TIMESTAMP}|g" \
+              "$MANIFEST_PATH" > "${MANIFEST_PATH}.tmp"
+              mv "${MANIFEST_PATH}.tmp" "$MANIFEST_PATH"
+              echo "${MANIFEST_PATH}:"
+              cat "$MANIFEST_PATH"
+        else
+          echo "$MANIFEST_PATH not found. No build info was recorded. Please add a template manifest in this repo. explorer-jes/$MANIFEST_PATH is a good example."
+        fi
+      shell: bash
     
     - name: 'set plugin version'
       run: |
