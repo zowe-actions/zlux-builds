@@ -111,7 +111,7 @@ runs:
               echo "Repository '$artifactory_repo_name' not found in binaryDependencies."
             fi
             URL='https://zowe.jfrog.io/zowe/list/libs-snapshot-local/org/zowe/zlux'
-            curl "${URL}/${REPOSITORY_NAME}/2.18.3-V2.X-RC/${artifact_tar}" -L -k -o v2plugin.tar
+            curl "${URL}/${REPOSITORY_NAME}/${v2_version}-V2.X-RC/${artifact_tar}" -L -k -o v2plugin.tar
             tar xpoUf v2plugin.tar
             cp -rf web/* ../$REPOSITORY_NAME/web
             cd .. && rm -rf v2clone     
