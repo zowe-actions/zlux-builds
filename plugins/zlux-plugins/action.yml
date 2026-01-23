@@ -97,12 +97,12 @@ runs:
             git clone -b v2.x/master https://github.com/zowe/zowe-install-packaging.git
             manifest_file="zowe-install-packaging/manifest.json.template"
             artifactory_repo_name="org.zowe.zlux.${REPOSITORY_NAME}"
-            v2_version=$(cat zowe-install-packaging/manifest.json.template | grep version | head -1 | awk -F: '{ print $2 }' | sed 's/[",]//g' | xargs)
             binary_dependencies=$(sed -n '/"binaryDependencies": {/,/^}/p' "$manifest_file")
             if [[ -z "$binary_dependencies" ]]; then
               echo "No 'binaryDependencies' section found in the manifest."
               exit 1
             fi
+            plugin_version=$(echo "$binary_dependencies" | grep -A 10 "\"$artifactory_repo_name\":" | grep -m 1 '"version"' | sed 's/.*"version": "\(.*\)".*/\1/')
             artifact=$(echo "$binary_dependencies" | grep -A 10 "\"$artifactory_repo_name\":" | grep -m 1 '"artifact"' | sed 's/.*"artifact": "\(.*\)".*/\1/')
             artifact_tar=$(echo "$artifact" | sed 's/.pax$/.tar/')
             if [[ -n "$artifact_tar" ]]; then
@@ -111,7 +111,7 @@ runs:
               echo "Repository '$artifactory_repo_name' not found in binaryDependencies."
             fi
             URL='https://zowe.jfrog.io/zowe/list/libs-snapshot-local/org/zowe/zlux'
-            curl "${URL}/${REPOSITORY_NAME}/${v2_version}-V2.X-RC/${artifact_tar}" -L -k -o v2plugin.tar
+            curl "${URL}/${REPOSITORY_NAME}/${plugin_version}/${artifact_tar}" -L -k -o v2plugin.tar
             tar xpoUf v2plugin.tar
             cp -rf web/* ../$REPOSITORY_NAME/web
             cd .. && rm -rf v2clone     
