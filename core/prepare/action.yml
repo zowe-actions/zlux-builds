@@ -44,12 +44,6 @@ runs:
         echo REPOSITORY_NAME=$GITHUB_REPOSITORY | sed 's/zowe\///' >> $GITHUB_ENV
       shell: bash
     
-    - name: 'setup apt-get'
-      run: |
-        sudo apt-get update -y
-        sudo apt-get install -y ant-contrib
-      shell: bash
-    
     - name: 'export github username and email'
       run: |
         if [ -n "${{ inputs.github-user }}" ]

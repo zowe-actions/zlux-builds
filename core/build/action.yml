@@ -146,7 +146,8 @@ runs:
     - name: 'build'
       run: |
         cd zlux/zlux-build
-        bash -c set -o pipefail && ant testing 2>&1 | grep -vE "^\s+\[exec\]\s+0\% compiling"
+        set -o pipefail
+        bash scripts/bash/testing.sh 2>&1 | grep -vE "^\s+\[exec\]\s+0\% compiling"
       shell: bash 
 
     - name: 'test'
@@ -165,7 +166,7 @@ runs:
     - name: 'remove source'
       run: |
         cd zlux/zlux-build 
-        ant -Dcapstone=../../dist removeSource
+        CAPSTONE="$(cd ../.. && pwd)/dist" bash scripts/bash/build_ng2.sh removeSource
       shell: bash 
       
     - name: 'clone v2'
