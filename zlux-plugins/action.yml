@@ -74,8 +74,8 @@ runs:
     
     - name: 'remove source code'
       run: |
-        cd ../zlux/zlux-build 
-        ant removeSource
+        cd ../zlux/zlux-build
+        bash scripts/bash/build_ng2.sh removeSource
       shell: bash
       
     - name: 'package tar'
