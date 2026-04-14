@@ -15,7 +15,7 @@ runs:
         export MVD_HOME_DIR=$(pwd) 
         echo MVD_HOME_DIR=$(pwd) >> $GITHUB_ENV
         git clone -b v2.x/master https://github.com/1000TurquoisePogs/zowe-install-packaging.git
-        npm config set registry https://zowe.jfrog.io/zowe/api/npm/npm-release/
+        npm config set @zowe:registry https://zowe.jfrog.io/zowe/api/npm/npm-release/
         mkdir zlux
         cp -rf $REPOSITORY_NAME zlux/
         cd zlux
