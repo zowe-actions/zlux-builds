@@ -203,6 +203,10 @@ runs:
       run: |
         chmod +x dist/zlux-build/*.sh
         cd dist
+        # Deduplicate: place canonical LICENSE and CONTRIBUTING.md at the tar root
+        cp zlux-build/LICENSE ./LICENSE
+        cp zlux-build/CONTRIBUTING.md ./CONTRIBUTING.md
+        find . -mindepth 2 \( -name "LICENSE" -o -name "CONTRIBUTING.md" \) -delete
         tar cf ../zlux.tar -H ustar *
         cd ..
         git clone -b v3.x/master https://github.com/1000TurquoisePogs/zowe-install-packaging.git
