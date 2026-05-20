@@ -124,7 +124,7 @@ runs:
     - name: 'remove source code'
       run: |
         cd ../zlux/zlux-build 
-        ant removeSource
+        bash scripts/bash/build_ng2.sh removeSource
         cd ../$REPOSITORY_NAME/web
         find . -type f -name '*.map.*' -exec rm {} \;
         find . -type f -name '*.map' -exec rm {} \;
