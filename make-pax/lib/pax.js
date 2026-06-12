@@ -149,7 +149,7 @@ _BPXK_AUTOCVT=ON ../tag-files.sh .`
         } finally {
 			console.log('cleaning up all temporary')
 			var cmdClean = `rm -rf ${paxRemoteWorkspace}/${paxName}-${currentBranch}-${jclBuildNumber}`
-			utils.ssh(paxSSHHost,paxSSHPort,paxSSHUsername,paxSSHPassword,cmdClean)
+			utils.ssh(paxSSHHost,paxSSHPort,paxSSHUsername,paxSSHPassword,cmdClean, 1)  // 1 retry for cleanup — non-critical
 			console.log(`Cleaning up remote workspace success`)
         } //FINALLY
         return `${paxRemoteWorkspace}/${paxName}-${currentBranch}-${jclBuildNumber}/plugin.pax`
