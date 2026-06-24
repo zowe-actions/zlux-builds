@@ -12,7 +12,6 @@ class pax{
 
     static pack(args) {
         const func = 'pack:'
-        
         const job = args.get('job')
         const paxSSHHost = args.get('paxSSHHost')
         const paxSSHPort = args.get('paxSSHPort')

@@ -156,7 +156,7 @@ runs:
 
     - name: 'test'
       run: |
-        if [ -n ${{ github.event.pull_request.number }} &&  "$REPOSITORY_NAME" != "zlux-app-server"]
+        if [ -n ${{ github.event.pull_request.number }} &&  "$REPOSITORY_NAME" != "zlux-app-server" ]
         then
           cd dist
           packages=$(find ./${REPOSITORY_NAME} -name package.json | { grep -v node_modules || true; })
