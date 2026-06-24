@@ -85,6 +85,33 @@ runs:
         fi
       shell: bash
 
+    - name: 'detect zowe major version and load config'
+      run: |
+        # Determine the Zowe major version from branch context
+        BRANCH_FOR_DETECTION="${GITHUB_REF#refs/heads/}"
+        if [ -n "${{ github.event.pull_request.base.ref }}" ]; then
+          BRANCH_FOR_DETECTION="${{ github.event.pull_request.base.ref }}"
+        fi
+        ZOWE_MAJOR_VERSION=$(echo "$BRANCH_FOR_DETECTION" | sed -n 's/^v\([0-9]*\)\..*/\1/p')
+        if [ -z "$ZOWE_MAJOR_VERSION" ]; then
+          echo "WARNING: Could not detect Zowe version from branch '$BRANCH_FOR_DETECTION', defaulting to 3"
+          ZOWE_MAJOR_VERSION=3
+        fi
+        echo "ZOWE_MAJOR_VERSION=$ZOWE_MAJOR_VERSION" >> $GITHUB_ENV
+        echo "Detected Zowe major version: $ZOWE_MAJOR_VERSION"
+
+        # Load version-specific config
+        CONFIG_DIR="${{ github.action_path }}/../../config"
+        CONFIG_FILE="$CONFIG_DIR/v${ZOWE_MAJOR_VERSION}.env"
+        if [ -f "$CONFIG_FILE" ]; then
+          echo "Loading version config from $CONFIG_FILE"
+          sed '/^#/d' "$CONFIG_FILE" | awk NF >> $GITHUB_ENV
+        else
+          echo "ERROR: No config file found at $CONFIG_FILE"
+          exit 1
+        fi
+      shell: bash
+
     - name: 'set plugin version'
       run: |
         if [ ! -n ${{ inputs.plugin-version }} ]
@@ -96,7 +123,7 @@ runs:
           ZOWE_VERSION=$(cat manifest.yaml | grep version | head -1 | awk -F: '{ print $2 }' | sed 's/[",]//g' )
           echo "ZOWE_VERSION=$ZOWE_VERSION" | tr -d ' ' >> $GITHUB_ENV
         else
-          git clone --branch v3.x/staging https://github.com/zowe/zowe-install-packaging.git
+          git clone --branch "$ZOWE_MANIFEST_BRANCH" https://github.com/zowe/zowe-install-packaging.git
           ZOWE_VERSION=$(cat zowe-install-packaging/manifest.json.template  \
             | grep version \
             | head -1 \
@@ -113,12 +140,14 @@ runs:
         echo WORKING_DIR=/home/runner/work/"$REPOSITORY_NAME" >> $GITHUB_ENV
       shell: bash
       
-    - name: set release'
+    - name: 'set release'
       run: |
         if [ "${{ inputs.release }}" = "true" ];
         then 
           echo RELEASE=${{ inputs.release }} >> $GITHUB_ENV
-          echo DEFAULT_PLUGIN_BRANCH=v3.x/rc >> $GITHUB_ENV
+          # Override plugin branch to rc for releases
+          RC_BRANCH="v${ZOWE_MAJOR_VERSION}.x/rc"
+          echo DEFAULT_PLUGIN_BRANCH=$RC_BRANCH >> $GITHUB_ENV
         else
           echo RELEASE=false >> $GITHUB_ENV
         fi

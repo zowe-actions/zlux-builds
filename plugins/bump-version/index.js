@@ -11,6 +11,7 @@ var branch = core.getInput('branch')
 var repo = actionsGithub.context.repo.owner + '/' + actionsGithub.context.repo.repo
 
 if (branch == ''){
+	// Default to v3 but can be overridden via input
 	branch = 'v3.x/staging'
 }
 if (version == '') {

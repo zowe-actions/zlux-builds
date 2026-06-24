@@ -51,25 +51,16 @@ runs:
     
     - name: 'determine version'
       run: |
-        if [ ${CURRENT_VERSION:1:1} == 1 ];
-        then
-          echo STAGING_BRANCH="v1.x/staging" >> $GITHUB_ENV
-          echo RELEASE_BRANCH="v1.x/rc" >> $GITHUB_ENV
-          echo MASTER_BRANCH="v1.x/master" >> $GITHUB_ENV
-        elif [ ${CURRENT_VERSION:1:1} == 2 ];
-        then
-          echo STAGING_BRANCH="v2.x/staging" >> $GITHUB_ENV
-          echo RELEASE_BRANCH="v2.x/rc" >> $GITHUB_ENV
-          echo MASTER_BRANCH="v2.x/master" >> $GITHUB_ENV
-        elif [ ${CURRENT_VERSION:1:1} == 3 ];
-        then
-          echo STAGING_BRANCH="v3.x/staging" >> $GITHUB_ENV
-          echo RELEASE_BRANCH="v3.x/rc" >> $GITHUB_ENV
-          echo MASTER_BRANCH="v3.x/master" >> $GITHUB_ENV
-        else
-          echo "Version not supported."
+        # Extract major version number from release version (e.g., v3.1.0 -> 3)
+        MAJOR_VERSION=$(echo "$CURRENT_VERSION" | sed -n 's/^v\?\([0-9]*\)\..*/\1/p')
+        if [ -z "$MAJOR_VERSION" ]; then
+          echo "ERROR: Could not extract major version from '$CURRENT_VERSION'"
           exit 1
         fi
+        echo "Detected major version: $MAJOR_VERSION"
+        echo STAGING_BRANCH="v${MAJOR_VERSION}.x/staging" >> $GITHUB_ENV
+        echo RELEASE_BRANCH="v${MAJOR_VERSION}.x/rc" >> $GITHUB_ENV
+        echo MASTER_BRANCH="v${MAJOR_VERSION}.x/master" >> $GITHUB_ENV
       shell: bash
       
     
