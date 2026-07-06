@@ -1,0 +1,72 @@
+name: "Publish"
+description: "This action helps publish zen"
+inputs:
+  os:
+    description: 'os'
+    required: true
+  perform-release:
+    description: 'perform-release'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: 'determine current branch or PR'
+      run: |
+        if [ -z ${{ github.event.pull_request.number }} ]
+        then
+          echo CURRENT_BRANCH=${GITHUB_REF#refs/heads/} >> $GITHUB_ENV
+        else
+          echo CURRENT_BRANCH=PR-${{ github.event.pull_request.number }} >> $GITHUB_ENV
+        fi
+      shell: bash
+    - name: 'set version'
+      run: |
+        if [ -f "package.json" ]
+        then
+          ZEN_VERSION=$(cat package.json | grep version | head -1 | awk -F: '{ print $2 }' | sed 's/[",]//g' )
+          echo "ZEN_VERSION=$ZEN_VERSION" | tr -d ' ' >> $GITHUB_ENV
+        else
+          echo 'package.json not found'
+          exit 1
+        fi
+      shell: bash
+    - name: 'set zen path'
+      run: |
+        echo REPOSITORY_NAME=$GITHUB_REPOSITORY | sed 's/zowe\///' >> $GITHUB_ENV
+        echo WORKING_DIR=/home/runner/work/"$REPOSITORY_NAME" >> $GITHUB_ENV
+      shell: bash
+      
+    - name: 'publish'
+      run: |
+        TIMESTAMP=`date +%Y%m%d.%H%M%S`
+        echo  "${{ inputs.perform-release }}" 
+        if [ "${{ inputs.perform-release }}" = true ]; then
+          ARTIFACTORY_REPO=libs-release-local/org/zowe/${REPOSITORY_NAME}/${ZEN_VERSION}
+        elif [ "${{ inputs.os }}" = "macos" ]; then
+          ARTIFACTORY_REPO=libs-snapshot-local/org/zowe/${REPOSITORY_NAME}/${ZEN_VERSION}-${CURRENT_BRANCH:u}-${JFROG_CLI_BUILD_NUMBER}
+        else
+          ARTIFACTORY_REPO=libs-snapshot-local/org/zowe/${REPOSITORY_NAME}/${ZEN_VERSION}-${CURRENT_BRANCH^^}-${JFROG_CLI_BUILD_NUMBER}
+        fi
+        cd out/make
+        if [ "${{ inputs.os }}" = "windows" ];
+        then
+          cd squirrel.windows/x64
+          jfrog rt u zowe_install_wizard-${ZEN_VERSION}-full.nupkg ${ARTIFACTORY_REPO}/windows/zowe_install_wizard-${ZEN_VERSION}-full.nupkg
+          jfrog rt u zowe-install-wizard-${ZEN_VERSION}\ Setup.exe ${ARTIFACTORY_REPO}/windows/zowe-install-wizard-${ZEN_VERSION}\ Setup.exe
+          echo "${ARTIFACTORY_REPO}/windows/zowe_install_wizard-${ZEN_VERSION}-full.nupkg"
+          echo "${ARTIFACTORY_REPO}/windows/zowe-install-wizard-${ZEN_VERSION}\ Setup.exe"
+        elif [ "${{ inputs.os }}" = "macos" ];
+        then
+          jfrog rt u zowe-install-wizard-${ZEN_VERSION}-arm64.dmg ${ARTIFACTORY_REPO}/mac/zowe-install-wizard-${ZEN_VERSION}-arm64.dmg
+          echo "${ARTIFACTORY_REPO}/mac/zowe-install-wizard-${ZEN_VERSION}-arm64.dmg"
+        elif [ "${{ inputs.os }}" = "ubuntu" ];
+        then
+          cd deb/x64
+          jfrog rt u zowe-install-wizard_${ZEN_VERSION}_amd64.deb ${ARTIFACTORY_REPO}/unix/zowe-install-wizard_${ZEN_VERSION}_amd64.deb
+          echo "${ARTIFACTORY_REPO}/unix/zowe-install-wizard_${ZEN_VERSION}_amd64.deb"
+          cd ../../rpm/x64
+          jfrog rt u zowe-install-wizard-${ZEN_VERSION}-1.x86_64.rpm ${ARTIFACTORY_REPO}/unix/zowe-install-wizard-${ZEN_VERSION}-1.x86_64.rpm
+          echo "${ARTIFACTORY_REPO}/unix/zowe-install-wizard-${ZEN_VERSION}-1.x86_64.rpm"
+        fi
+      shell: bash

@@ -17,10 +17,15 @@
   "homepage": "https://github.com/zowe-actions/zlux-builds#readme",
   "dependencies": {
     "@actions/core": "^1.10.0",
-    "debug": "^4.3.4",
-    "glob": "^7.2.3",
+    "@actions/github": "^5.1.1",
+    "debug": "^4.3.2",
+    "glob": "^7.1.7",
     "js-yaml": "^4.1.0",
-    "semver": "^7.3.7",
-    "zowe-common": "github:zowe-actions/zowe-common"
+    "npm-registry": "file:npm-registry",
+    "semver": "^7.3.5",
+    "zowe-common": "zowe-actions/zowe-common"
+  },
+  "devDependencies": {
+    "@vercel/ncc": "^0.38.1"
   }
 }

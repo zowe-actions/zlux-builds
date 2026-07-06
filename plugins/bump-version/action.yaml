@@ -1,0 +1,14 @@
+name: "Bump npm version"
+description: "Bump npm version"
+inputs:
+  branch:
+    description: 'the default branch'
+    required: false
+  version:
+    description: 'which version level needed to bump version, eg. npm version patch'
+    required: false
+    default: 'minor'
+
+runs:
+  using: 'node12'
+  main: 'dist/index.js'

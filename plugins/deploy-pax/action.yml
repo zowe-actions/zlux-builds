@@ -1,0 +1,25 @@
+name: "deploy"
+description: "This action helps build and test all the zlux plugins"
+
+runs:
+  using: "composite"
+  steps:
+    - name: 'deploy'
+      run: |
+        cd ..
+        TIMESTAMP=`date +%Y%m%d.%H%M%S`
+        mv plugin.pax ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.pax
+        mv plugin.tar ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.tar
+        if [ $RELEASE = "true" ];
+        then
+          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.pax ${ARTIFACTORY_REPO}/${REPOSITORY_NAME}/${ZOWE_VERSION}-V3.X-RC/${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.pax
+          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.tar ${ARTIFACTORY_REPO}/${REPOSITORY_NAME}/${ZOWE_VERSION}-V3.X-RC/${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.tar
+          echo "${ARTIFACTORY_REPO}/${REPOSITORY_NAME}/${ZOWE_VERSION}-V2.X-RC/${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.pax"
+          echo "${ARTIFACTORY_REPO}/${REPOSITORY_NAME}/${ZOWE_VERSION}-V2.X-RC/${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.tar"
+        else
+          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.pax ${ARTIFACTORY_REPO}/${REPOSITORY_NAME}/${ZOWE_VERSION}-${DEPLOY_BRANCH^^}/${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.pax
+          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.tar ${ARTIFACTORY_REPO}/${REPOSITORY_NAME}/${ZOWE_VERSION}-${DEPLOY_BRANCH^^}/${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.tar
+          echo "${ARTIFACTORY_REPO}/${REPOSITORY_NAME}/${ZOWE_VERSION}-${DEPLOY_BRANCH^^}/${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.pax"
+          echo "${ARTIFACTORY_REPO}/${REPOSITORY_NAME}/${ZOWE_VERSION}-${DEPLOY_BRANCH^^}/${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.tar"
+        fi      
+      shell: bash

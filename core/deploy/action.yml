@@ -1,30 +1,43 @@
 name: "deploy"
 description: "This action deploys the pax and tar in artifactory"
 
+inputs:
+  source_repo:
+    required: false
+  source_pr:
+    required: false
+
+
 runs:
   using: "composite"
   steps:
     - name: 'deploy'
       run: |
-        TIMESTAMP=`date +%Y%m%d.%H%M%S`
+        TIMESTAMP=$(date +%Y%m%d.%H%M%S)
         mv zlux.pax ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.pax
         mv zlux.tar ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.tar
-        if [ -n "${CUSTOM_PR}" ]
-        then
-          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.pax ${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-${JFROG_CLI_BUILD_NUMBER}-${DEPLOY_BRANCH}-${REPOSITORY_NAME}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.pax
-          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.tar ${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-${JFROG_CLI_BUILD_NUMBER}-${DEPLOY_BRANCH}-${REPOSITORY_NAME}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.tar
-          echo "${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-${JFROG_CLI_BUILD_NUMBER}-${DEPLOY_BRANCH}-${REPOSITORY_NAME}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.pax"
-          echo "${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-${JFROG_CLI_BUILD_NUMBER}-${DEPLOY_BRANCH}-${REPOSITORY_NAME}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.tar"
-        elif [ -n "${{ github.event.pull_request.number }}" ]
-        then
-          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.pax ${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-$REPOSITORY_NAME-${CURRENT_PR}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.pax
-          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.tar ${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-$REPOSITORY_NAME-${CURRENT_PR}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.tar
-          echo "${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-$REPOSITORY_NAME-${CURRENT_PR}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.pax"
-          echo "${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-$REPOSITORY_NAME-${CURRENT_PR}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.tar"
+        if [ -n "${CUSTOM_PR}" ]; then
+          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.pax \
+            ${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-${JFROG_CLI_BUILD_NUMBER}-${DEPLOY_BRANCH}-${REPOSITORY_NAME}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.pax
+          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.tar \
+            ${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-${JFROG_CLI_BUILD_NUMBER}-${DEPLOY_BRANCH}-${REPOSITORY_NAME}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.tar
+        elif [ -n "${INPUT_SOURCE_PR}" ]; then
+          REPOSITORY_NAME="${INPUT_SOURCE_REPO}"
+          CURRENT_PR="${INPUT_SOURCE_PR}"
+          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.pax \
+            ${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-${REPOSITORY_NAME}-PR-${CURRENT_PR}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.pax
+          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.tar \
+            ${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-${REPOSITORY_NAME}-PR-${CURRENT_PR}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.tar
+        elif [ -n "${{ github.event.pull_request.number }}" ]; then
+          CURRENT_PR="${{ github.event.pull_request.number }}"
+          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.pax \
+            ${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-${REPOSITORY_NAME}-PR-${CURRENT_PR}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.pax
+          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.tar \
+            ${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-${REPOSITORY_NAME}-PR-${CURRENT_PR}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.tar
         else
-          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.pax ${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-${DEPLOY_BRANCH^^}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.pax
-          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.tar ${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-${DEPLOY_BRANCH^^}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.tar
-          echo "${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-${DEPLOY_BRANCH^^}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.pax"
-          echo "${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-${DEPLOY_BRANCH^^}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.tar"
+          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.pax \
+            ${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-${DEPLOY_BRANCH^^}-ZLUX-CORE/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.pax
+          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.tar \
+            ${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-${DEPLOY_BRANCH^^}-ZLUX-CORE/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.tar
         fi
       shell: bash

@@ -1,0 +1,29 @@
+name: "npm-publish"
+description: "This action publishes npm packages to zowe jrfog"
+
+runs:
+  using: "composite"
+  steps:
+    - name: 'get package name'
+      run: |
+        cd build/component
+        NPM_PACKAGE_NAME=$(cat package.json | jq -r '.name')
+        echo "NPM_PACKAGE_NAME=$NPM_PACKAGE_NAME" >> $GITHUB_ENV
+      shell: bash
+  
+    - name: 'repackage'
+      run: |
+        mkdir ../sample-app
+        cp build/component/package.json ../sample-app
+        cd ../sample-app
+        cp ../${REPOSITORY_NAME}-${ZOWE_VERSION}-*.pax .
+        mv ${REPOSITORY_NAME}-${ZOWE_VERSION}-*.pax ${NPM_PACKAGE_NAME}.pax
+        cat package.json
+      shell: bash
+
+    - name: 'deploy npm'
+      run: |
+        cd ../sample-app
+        pwd
+        npm publish --tag latest --registry https://zowe.jfrog.io/zowe/api/npm/npm-local-release/      
+      shell: bash

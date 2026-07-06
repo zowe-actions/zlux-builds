@@ -1,0 +1,18 @@
+{
+  "name": "npm-registry",
+  "version": "1.0.0",
+  "description": "A class that implements an npm registry",
+  "main": "lib/index.js",
+  "directories": {
+    "lib": "lib"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "IBM",
+  "license": "EPL-2.0",
+  "dependencies": {
+    "debug": "4.3.2",
+    "zowe-common": "zowe-actions/zowe-common"
+  }
+}

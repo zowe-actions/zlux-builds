@@ -1,0 +1,42 @@
+name: "Setup"
+description: "Setup action for NodeJS project"
+inputs:
+  package-name: 
+    description: 'package name'
+    required: false
+  working-directory:
+    description: the directory of where to run setup action
+    required: false
+
+  install-registry-url:
+    description: 'install registry url'
+    required: false
+  install-registry-email:
+    description: 'install registry email'
+    required: false
+  install-registry-username:
+    description: 'install registry username'
+    required: false
+  install-registry-password:
+    description: 'install registry password'
+    required: false
+  install-registry-token-credential:
+    description: 'install registry token credential'
+    required: false
+
+  publish-registry-email:
+    description: 'publish registry email'
+    required: false
+  publish-registry-username:
+    description: 'publish registry username'
+    required: false
+  publish-registry-password:
+    description: 'publish registry password'
+    required: false
+  publish-registry-token-credential:
+    description: 'publish registry token credential'
+    required: false
+
+runs:
+  using: 'node12'
+  main: 'dist/index.js'

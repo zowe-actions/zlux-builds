@@ -106,27 +106,52 @@ runs:
           echo "Set version to:"
           cat version.properties
           cd ../zlux-app-server
+          export commit_hash=$(git rev-parse --short HEAD)
+          export current_timestamp=$(date +%s%3N)
+          export zlux_version="${majorVersion}.${minorVersion}.${microVersion}"
+          echo $commit_hash
+          echo $current_timestamp
+          sed -i -e "s|{{build\\.branch}}|${CURRENT_BRANCH}|g" \
+                -e "s|{{build\\.number}}|${JFROG_CLI_BUILD_NUMBER}|g" \
+                -e "s|{{build\\.commitHash}}|${commit_hash}|g" \
+                -e "s|{{build\\.timestamp}}|${current_timestamp}|g" \
+                -e "s|{{build\\.version}}|${ZOWE_VERSION}|g" \
+               "manifest.yaml"
+          echo "manifest is:"
+          cat manifest.yaml
+      shell: bash  
+    
+    - name: 'set system apps version'
+      run: |
+        cd zlux/zlux-app-manager/system-apps
+        for app_folder in */; 
+        do 
+          cd $app_folder
           if [ -e "manifest.yaml" ]; then
-            export commit_hash=$(git rev-parse --short "$GITHUB_SHA")
+            echo "In $app_folder"
+            export commit_hash=$(git rev-parse --short HEAD)
             export current_timestamp=$(date +%s%3N)
-            export zlux_version="${majorVersion}.${minorVersion}.${microVersion}"
-            echo $commit_hash
-            echo $current_timestamp
             sed -i -e "s|{{build\\.branch}}|${CURRENT_BRANCH}|g" \
-                   -e "s|{{build\\.number}}|${JFROG_CLI_BUILD_NUMBER}|g" \
-                   -e "s|{{build\\.commitHash}}|${commit_hash}|g" \
-                   -e "s|{{build\\.timestamp}}|${current_timestamp}|g" \
-                   -e "s|{{build\\.version}}|${ZOWE_VERSION}|g" \
-                   "manifest.yaml"
+                     -e "s|{{build\\.number}}|${JFROG_CLI_BUILD_NUMBER}|g" \
+                     -e "s|{{build\\.commitHash}}|${commit_hash}|g" \
+                     -e "s|{{build\\.timestamp}}|${current_timestamp}|g" \
+                     "manifest.yaml"
             echo "manifest is:"
             cat manifest.yaml
           fi
-      shell: bash  
+          cd ..
+        done
+      shell: bash 
 
     - name: 'build'
       run: |
         cd zlux/zlux-build
-        bash -c set -o pipefail && ant testing 2>&1 | grep -vE "^\s+\[exec\]\s+0\% compiling"
+        set -o pipefail
+        if [ "$BUILD_METHOD" = "ant" ]; then
+          bash -c "ant testing 2>&1" | grep -vE "^\s+\[exec\]\s+0\% compiling"
+        else
+          bash scripts/bash/testing.sh 2>&1 | grep -vE "^\s+\[exec\]\s+0\% compiling"
+        fi
       shell: bash 
 
     - name: 'test'
@@ -144,17 +169,57 @@ runs:
       
     - name: 'remove source'
       run: |
-        cd zlux/zlux-build 
-        ant -Dcapstone=../../dist removeSource
+        cd zlux/zlux-build
+        if [ "$BUILD_METHOD" = "ant" ]; then
+          ant -Dcapstone=../../dist removeSource
+        else
+          CAPSTONE="$(cd ../.. && pwd)/dist" bash scripts/bash/build_ng2.sh removeSource
+        fi
       shell: bash 
+      
+    - name: 'clone v2 web assets'
+      if: ${{ env.ZOWE_MAJOR_VERSION == '3' }}
+      run: | 
+        mkdir clone && cd clone
+        git clone https://github.com/zowe/zowe-install-packaging.git -b v2.x/master
+        ZOWE_V2_VERSION=$(cat zowe-install-packaging/manifest.json.template  \
+          | grep version \
+          | head -1 \
+          | awk -F: '{ print $2 }' \
+          | sed 's/[", ]//g')
+        ZLUX_CORE_PAX_V2=$(cat zowe-install-packaging/manifest.json.template  \
+          | grep '"org.zowe.zlux.zlux-core": {' -A 10 \
+          | grep '"artifact":' \
+          | grep -m 1 '"artifact":' \
+          | awk -F: '{ print $2 }' \
+          | sed 's/[", ]//g' \
+          | sed 's/\.pax$/.tar/')
+        curl "https://zowe.jfrog.io/zowe/list/libs-snapshot-local/org/zowe/zlux/zlux-core/${ZOWE_V2_VERSION}-RC/${ZLUX_CORE_PAX_V2}" -L -k -o zlux.tar
+        tar xpoUf zlux.tar 
+        cd zlux-app-manager/system-apps
+        for app_folder in */
+        do 
+          cp -rvf ${app_folder}web/* ../../../dist/zlux-app-manager/system-apps/${app_folder}web
+        done
+        cd ../..
+        mv zlux-app-manager ../dist/zlux-app-manager-v2
+        cd ../dist/zlux-app-manager-v2 && rm -rf bootstrap system-apps
+        cd ../zlux-app-manager/system-apps && find . -type f -name '*.map' -exec rm {} \;
+      shell: bash
       
     - name: 'package'
       run: |
         chmod +x dist/zlux-build/*.sh
         cd dist
+        # Deduplicate: place canonical LICENSE and CONTRIBUTING.md at the tar root
+        cp zlux-build/LICENSE ./LICENSE
+        cp zlux-build/CONTRIBUTING.md ./CONTRIBUTING.md
+        find . -mindepth 2 \( -name "LICENSE" -o -name "CONTRIBUTING.md" \) -delete
         tar cf ../zlux.tar -H ustar *
         cd ..
-        git clone -b v2.x/master https://github.com/zowe/zowe-install-packaging.git
+        # Derive the master branch for zowe-install-packaging from CURRENT_BRANCH
+        MASTER_BRANCH=$(echo "$CURRENT_BRANCH" | sed 's|/staging$|/master|; s|/rc$|/master|')
+        git clone -b "$MASTER_BRANCH" https://github.com/1000TurquoisePogs/zowe-install-packaging.git
         export MVD_HOME_DIR=$(pwd) 
         echo MVD_HOME_DIR=$(pwd) >> $GITHUB_ENV
       shell: bash

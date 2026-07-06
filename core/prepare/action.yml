@@ -13,6 +13,9 @@ inputs:
   default-base:
     description: 'base branch to build from'
     required: false
+  zowe-version:
+    description: 'Zowe major version override (2, 3, etc.). Auto-detected from branch if not set.'
+    required: false
 
 runs:
   using: "composite"
@@ -31,9 +34,9 @@ runs:
     
     - name: 'determine current branch or PR'
       run: |
-        if [ -n "${{ inputs.DEFAULT_BRANCH }}" ]
+        if [ -n "${{ inputs.default-base }}" ]
         then 
-          echo CURRENT_BRANCH=${{ inputs.DEFAULT_BRANCH }} >> $GITHUB_ENV
+          echo CURRENT_BRANCH=${{ inputs.default-base }} >> $GITHUB_ENV
         elif [ -z "${{ github.event.pull_request.number }}" ]
         then
           echo CURRENT_BRANCH=${GITHUB_REF#refs/heads/} >> $GITHUB_ENV
@@ -43,11 +46,35 @@ runs:
         fi
         echo REPOSITORY_NAME=$GITHUB_REPOSITORY | sed 's/zowe\///' >> $GITHUB_ENV
       shell: bash
-    
-    - name: 'setup apt-get'
+
+    - name: 'detect zowe major version and load config'
       run: |
-        sudo apt-get update -y
-        sudo apt-get install -y ant-contrib tart
+        # Determine the Zowe major version
+        if [ -n "${{ inputs.zowe-version }}" ]; then
+          ZOWE_MAJOR_VERSION="${{ inputs.zowe-version }}"
+        else
+          # Auto-detect from CURRENT_BRANCH (e.g., v3.x/staging -> 3, v2.x/rc -> 2)
+          ZOWE_MAJOR_VERSION=$(echo "$CURRENT_BRANCH" | sed -n 's/^v\([0-9]*\)\..*/\1/p')
+          if [ -z "$ZOWE_MAJOR_VERSION" ]; then
+            echo "WARNING: Could not detect Zowe version from branch '$CURRENT_BRANCH', defaulting to 3"
+            ZOWE_MAJOR_VERSION=3
+          fi
+        fi
+        echo "ZOWE_MAJOR_VERSION=$ZOWE_MAJOR_VERSION" >> $GITHUB_ENV
+        echo "Detected Zowe major version: $ZOWE_MAJOR_VERSION"
+
+        # Load version-specific config
+        CONFIG_DIR="${{ github.action_path }}/../../config"
+        CONFIG_FILE="$CONFIG_DIR/v${ZOWE_MAJOR_VERSION}.env"
+        if [ -f "$CONFIG_FILE" ]; then
+          echo "Loading version config from $CONFIG_FILE"
+          sed '/^#/d' "$CONFIG_FILE" | awk NF >> $GITHUB_ENV
+        else
+          echo "ERROR: No config file found at $CONFIG_FILE"
+          echo "Available configs:"
+          ls "$CONFIG_DIR"/*.env 2>/dev/null || echo "  (none)"
+          exit 1
+        fi
       shell: bash
     
     - name: 'export github username and email'
@@ -71,7 +98,7 @@ runs:
     
     - name: 'get Zowe version'
       run: |
-        git clone --branch v1.x/staging https://github.com/zowe/zowe-install-packaging.git
+        git clone --branch "$ZOWE_MANIFEST_BRANCH" https://github.com/zowe/zowe-install-packaging.git
         ZOWE_VERSION=$(cat zowe-install-packaging/manifest.json.template  \
           | grep version \
           | head -1 \

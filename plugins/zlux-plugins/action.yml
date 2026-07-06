@@ -1,0 +1,141 @@
+name: "Build and Test plugins"
+description: "This action helps build and test all the zlux plugins"
+inputs:
+  build-zss:
+    description: 'Does plugins contains zss code'
+    required: true
+  clone-v2:
+    description: 'If set to true it will clone v2 into v3'
+    required: false
+    default: true
+
+
+runs:
+  using: "composite"
+  steps:
+    - name: 'checkout'
+      run: |
+        cd ..
+        export MVD_HOME_DIR=$(pwd) 
+        echo MVD_HOME_DIR=$(pwd) >> $GITHUB_ENV
+        # Derive the master branch from DEFAULT_PLUGIN_BRANCH context
+        MASTER_BRANCH=$(echo "$DEFAULT_PLUGIN_BRANCH" | sed 's|/staging$|/master|; s|/rc$|/master|')
+        git clone -b "$MASTER_BRANCH" https://github.com/1000TurquoisePogs/zowe-install-packaging.git
+        npm config set @zowe:registry https://zowe.jfrog.io/zowe/api/npm/npm-release/
+        mkdir zlux
+        cp -rf $REPOSITORY_NAME zlux/
+        cd zlux
+        ls
+        git clone https://github.com/zowe/zlux-app-manager.git -b $DEFAULT_PLUGIN_BRANCH
+        git clone https://github.com/zowe/zlux-platform.git -b $DEFAULT_PLUGIN_BRANCH
+        git clone https://github.com/zowe/zlux-build.git -b $DEFAULT_PLUGIN_BRANCH
+        if ${{ inputs.build-zss }}
+        then 
+          git clone https://github.com/zowe/zss.git -b $DEFAULT_PLUGIN_BRANCH 
+          git clone https://github.com/zowe/zowe-common-c.git -b $DEFAULT_PLUGIN_BRANCH
+          cd zss 
+          git submodule update --init 
+          tar cf ../../zss.tar -H ustar * 
+          cd ../zowe-common-c 
+          tar cf ../../zowe-common-c.tar -H ustar *
+          echo "plugin contains ZSS code"
+          echo BUILD_ZSS=true >> $GITHUB_ENV
+        else
+          echo BUILD_ZSS=false >> $GITHUB_ENV
+          echo "Plugins doesn't contain zss code"
+        fi
+      shell: bash
+  
+    
+    - name: 'npm ci'
+      run: |
+        git config --global url."https://github.com/".insteadOf "ssh://git@github.com:"
+        git config --global url."https://".insteadOf "ssh://"
+        if [ $RELEASE = "true" ];
+        then 
+          cd ../zlux/zlux-app-manager/virtual-desktop && npm install
+        else
+          cd ../zlux/zlux-app-manager/virtual-desktop && npm ci
+        fi
+      shell: bash
+    
+    - name: 'build plugin'
+      run: |
+        git config --global url."https://github.com/".insteadOf "ssh://git@github.com:"
+        git config --global url."https://".insteadOf "ssh://"
+        cd ../zlux
+        export MVD_DESKTOP_DIR=$(pwd)/zlux-app-manager/virtual-desktop
+        echo $MVD_DESKTOP_DIR
+        packages=$(find ./${REPOSITORY_NAME} -name package.json | { grep -v node_modules || true; })
+        for package in $packages
+        do
+          if [ $(node -e "const fs = require('fs'); const pac = JSON.parse(fs.readFileSync('${package}')); if (pac.scripts && pac.scripts.build) { console.log('true')};") = "true" ]
+          then
+            sh -c "cd `dirname $package` && npm ci && npm run build "
+          fi
+        done
+      shell: bash
+      
+    - name: 'test'
+      run: |
+        cd ../zlux
+        packages=$(find ./${REPOSITORY_NAME} -name package.json | { grep -v node_modules || true; })
+        for package in $packages
+        do
+          if [ $(node -e "const fs = require('fs'); const pac = JSON.parse(fs.readFileSync('${package}')); if (pac.scripts && pac.scripts.build) { console.log('true')};") = "true" ]
+          then
+            sh -c "cd `dirname $package` && npm test "
+          fi
+        done
+      shell: bash
+      
+    - name: 'clone v2.x/master version'
+      run: |
+        framework_value=$(cat ../$REPOSITORY_NAME/pluginDefinition.json | grep -oP '"framework":\s*"\K[^"]+')
+        if [[ "$framework_value" == "angular" || "$framework_value" == "angular2" ]]; then
+          echo "this is angular plugin"
+          if [ "${{ inputs.clone-v2 }}" ]; then
+            mkdir -p ../zlux/v2clone && cd ../zlux/v2clone
+            git clone -b v2.x/master https://github.com/zowe/zowe-install-packaging.git
+            manifest_file="zowe-install-packaging/manifest.json.template"
+            artifactory_repo_name="org.zowe.zlux.${REPOSITORY_NAME}"
+            binary_dependencies=$(sed -n '/"binaryDependencies": {/,/^}/p' "$manifest_file")
+            if [[ -z "$binary_dependencies" ]]; then
+              echo "No 'binaryDependencies' section found in the manifest."
+              exit 1
+            fi
+            plugin_version=$(echo "$binary_dependencies" | grep -A 10 "\"$artifactory_repo_name\":" | grep -m 1 '"version"' | sed 's/.*"version": "\(.*\)".*/\1/')
+            artifact=$(echo "$binary_dependencies" | grep -A 10 "\"$artifactory_repo_name\":" | grep -m 1 '"artifact"' | sed 's/.*"artifact": "\(.*\)".*/\1/')
+            artifact_tar=$(echo "$artifact" | sed 's/.pax$/.tar/')
+            if [[ -n "$artifact_tar" ]]; then
+              echo "The artifact for repository '$artifactory_repo_name' is: $artifact_tar"
+            else
+              echo "Repository '$artifactory_repo_name' not found in binaryDependencies."
+            fi
+            URL='https://zowe.jfrog.io/zowe/list/libs-snapshot-local/org/zowe/zlux'
+            curl "${URL}/${REPOSITORY_NAME}/${plugin_version}/${artifact_tar}" -L -k -o v2plugin.tar
+            tar xpoUf v2plugin.tar
+            cp -rf web/* ../$REPOSITORY_NAME/web
+            cd .. && rm -rf v2clone     
+          fi
+        else
+          echo "not angular"
+        fi
+      shell: bash
+    
+    - name: 'remove source code'
+      run: |
+        cd ../zlux/zlux-build 
+        bash scripts/bash/build_ng2.sh removeSource
+        cd ../$REPOSITORY_NAME/web
+        find . -type f -name '*.map.*' -exec rm {} \;
+        find . -type f -name '*.map' -exec rm {} \;
+        find . -name "*.gz" -exec sh -c 'name=${1%???}; if [ -f "$name" ]; then; rm "$name"; fi' - {} \;
+      shell: bash
+            
+    - name: 'package tar'
+      run: |
+        cd ../zlux/$REPOSITORY_NAME && tar cf ../../plugin.tar -H ustar *
+        cd ../zlux-build && tar cf ../../zlux-build.tar -H ustar *
+      shell: bash
+ 

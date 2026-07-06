@@ -1,0 +1,154 @@
+name: "prepare workflow"
+description: "This action helps build all the zlux plugins"
+inputs:
+  github-user:
+    description: 'github user'
+    required: false
+  github-password:
+    description: 'github password'
+    required: false
+  github-email:
+    description: 'github email'
+    required: false
+  release:
+    description: 'is this a release'
+    required: false
+  plugin-version:
+    description: 'specified version'
+    required: false    
+
+runs:
+  using: "composite"
+  steps:
+    - name: 'process env vars'
+      run: |
+        # Sanitize envvars by (in order)
+        # 1. remove comments (start with #); 
+        # 2. remove blank lines
+        sed '/^#/d' envvars.env | awk NF > envvars.env.new
+        rm envvars.env
+        mv envvars.env.new envvars.env
+        cat envvars.env >> $GITHUB_ENV
+      working-directory: ${{ github.action_path }}
+      shell: bash
+    
+    - name: 'determine current branch or PR'
+      run: |
+        if [ -z ${{ github.event.pull_request.number }} ]
+        then
+          echo CURRENT_BRANCH=${GITHUB_REF#refs/heads/} >> $GITHUB_ENV
+        else
+          echo CURRENT_BRANCH=PR-${{ github.event.pull_request.number }} >> $GITHUB_ENV
+        fi
+      shell: bash
+    
+    
+    - name: 'export github username and email'
+      run: |
+        if [ -n "${{ inputs.github-user }}" ]
+        then
+          git config --global user.name ${{ inputs.github-user }}
+          echo GITHUB_USER=${{ inputs.github-user }} >> $GITHUB_ENV
+        fi
+        if [ -n "${{ inputs.github-email }}" ]
+        then
+          git config --global user.email ${{ inputs.github-email }}
+        fi
+        if [ -n "${{ inputs.github-password }}" ]
+        then
+          echo GITHUB_PASSWORD=${{ inputs.github-password }} >> $GITHUB_ENV
+        fi
+        echo GITHUB_REPOSITORY=${{ github.repository }} >> $GITHUB_ENV
+        echo DEPLOY_BRANCH=$CURRENT_BRANCH | sed -e 's+\/+\-+' >> $GITHUB_ENV
+      shell: bash
+
+    - name: 'update build info in manifest.yaml'
+      run: |
+        cd "$GITHUB_WORKSPACE"
+        MANIFEST_PATH=manifest.yaml
+        CURRENT_BRANCH=$(git branch --show-current)
+        COMMIT_HASH=$(git rev-parse HEAD)
+        CURRENT_TIMESTAMP=$(date +%s%3N)
+
+        if [ -f "$MANIFEST_PATH" ]; then
+          echo "updating $MANIFEST_PATH"
+          sed -e "s|{{build\.branch}}|${CURRENT_BRANCH}|g" \
+              -e "s|{{build\.number}}|${GITHUB_RUN_NUMBER}|g" \
+              -e "s|{{build\.commitHash}}|${COMMIT_HASH}|g" \
+              -e "s|{{build\.timestamp}}|${CURRENT_TIMESTAMP}|g" \
+              "$MANIFEST_PATH" > "${MANIFEST_PATH}.tmp"
+              mv "${MANIFEST_PATH}.tmp" "$MANIFEST_PATH"
+              echo "${MANIFEST_PATH}:"
+              cat "$MANIFEST_PATH"
+        else
+          echo "$MANIFEST_PATH not found. No build info was recorded. Please add a template manifest in this repo. explorer-jes/$MANIFEST_PATH is a good example."
+        fi
+      shell: bash
+
+    - name: 'detect zowe major version and load config'
+      run: |
+        # Determine the Zowe major version from branch context
+        BRANCH_FOR_DETECTION="${GITHUB_REF#refs/heads/}"
+        if [ -n "${{ github.event.pull_request.base.ref }}" ]; then
+          BRANCH_FOR_DETECTION="${{ github.event.pull_request.base.ref }}"
+        fi
+        ZOWE_MAJOR_VERSION=$(echo "$BRANCH_FOR_DETECTION" | sed -n 's/^v\([0-9]*\)\..*/\1/p')
+        if [ -z "$ZOWE_MAJOR_VERSION" ]; then
+          echo "WARNING: Could not detect Zowe version from branch '$BRANCH_FOR_DETECTION', defaulting to 3"
+          ZOWE_MAJOR_VERSION=3
+        fi
+        echo "ZOWE_MAJOR_VERSION=$ZOWE_MAJOR_VERSION" >> $GITHUB_ENV
+        echo "Detected Zowe major version: $ZOWE_MAJOR_VERSION"
+
+        # Load version-specific config
+        CONFIG_DIR="${{ github.action_path }}/../../config"
+        CONFIG_FILE="$CONFIG_DIR/v${ZOWE_MAJOR_VERSION}.env"
+        if [ -f "$CONFIG_FILE" ]; then
+          echo "Loading version config from $CONFIG_FILE"
+          sed '/^#/d' "$CONFIG_FILE" | awk NF >> $GITHUB_ENV
+        else
+          echo "ERROR: No config file found at $CONFIG_FILE"
+          exit 1
+        fi
+      shell: bash
+
+    - name: 'set plugin version'
+      run: |
+        if [ ! -n ${{ inputs.plugin-version }} ]
+        then
+          ZOWE_VERSION=${{ inputs.plugin-version }}
+          echo "ZOWE_VERSION=$ZOWE_VERSION" | tr -d ' ' >> $GITHUB_ENV
+        elif [ -f "manifest.yaml" ]
+        then 
+          ZOWE_VERSION=$(cat manifest.yaml | grep version | head -1 | awk -F: '{ print $2 }' | sed 's/[",]//g' )
+          echo "ZOWE_VERSION=$ZOWE_VERSION" | tr -d ' ' >> $GITHUB_ENV
+        else
+          git clone --branch "$ZOWE_MANIFEST_BRANCH" https://github.com/zowe/zowe-install-packaging.git
+          ZOWE_VERSION=$(cat zowe-install-packaging/manifest.json.template  \
+            | grep version \
+            | head -1 \
+            | awk -F: '{ print $2 }' \
+            | sed 's/[",]//g')
+          echo "ZOWE_VERSION=$ZOWE_VERSION" | tr -d ' ' >> $GITHUB_ENV
+          rm -rf zowe-install-packaging
+        fi
+      shell: bash
+
+    - name: 'set plugins path'
+      run: |
+        echo REPOSITORY_NAME=$GITHUB_REPOSITORY | sed 's/zowe\///' >> $GITHUB_ENV
+        echo WORKING_DIR=/home/runner/work/"$REPOSITORY_NAME" >> $GITHUB_ENV
+      shell: bash
+      
+    - name: 'set release'
+      run: |
+        if [ "${{ inputs.release }}" = "true" ];
+        then 
+          echo RELEASE=${{ inputs.release }} >> $GITHUB_ENV
+          # Override plugin branch to rc for releases
+          RC_BRANCH="v${ZOWE_MAJOR_VERSION}.x/rc"
+          echo DEFAULT_PLUGIN_BRANCH=$RC_BRANCH >> $GITHUB_ENV
+        else
+          echo RELEASE=false >> $GITHUB_ENV
+        fi
+      shell: bash

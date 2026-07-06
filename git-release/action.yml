@@ -1,0 +1,160 @@
+name: "zlux-git-release"
+description: "This action helps tag and merge zlux-release"
+inputs:
+  github-user:
+    description: 'github user'
+    required: false
+  github-password:
+    description: 'github password'
+    required: false
+  github-email:
+    description: 'github email'
+    required: false
+  default-base:
+    description: 'base branch to build from'
+    required: false
+  release-version:
+    description: 'version of tags'
+    required: false
+  github-token:
+    description: 'auth token'
+    required: false
+  merge-to-master:
+    description: 'Merge rc to master'
+    required: false
+  update-rc:
+    description: 'Merge staging to rc'
+    required: false  
+  zowe-common-c-head:
+    description: 'head of zowe-common-c'
+    required: false
+  create-release:
+    description: 'Create github release'
+    required: false
+    
+
+runs:
+  using: "composite"
+  steps:
+    - name: 'process env vars'
+      run: |
+        # Sanitize envvars by (in order)
+        # 1. remove comments (start with #); 
+        # 2. remove blank lines
+        sed '/^#/d' envvars.env | awk NF > envvars.env.new
+        rm envvars.env
+        mv envvars.env.new envvars.env
+        cat envvars.env >> $GITHUB_ENV
+        echo CURRENT_VERSION=${{ inputs.release-version }} >> $GITHUB_ENV
+      working-directory: ${{ github.action_path }}
+      shell: bash
+    
+    - name: 'determine version'
+      run: |
+        # Extract major version number from release version (e.g., v3.1.0 -> 3)
+        MAJOR_VERSION=$(echo "$CURRENT_VERSION" | sed -n 's/^v\?\([0-9]*\)\..*/\1/p')
+        if [ -z "$MAJOR_VERSION" ]; then
+          echo "ERROR: Could not extract major version from '$CURRENT_VERSION'"
+          exit 1
+        fi
+        echo "Detected major version: $MAJOR_VERSION"
+        echo STAGING_BRANCH="v${MAJOR_VERSION}.x/staging" >> $GITHUB_ENV
+        echo RELEASE_BRANCH="v${MAJOR_VERSION}.x/rc" >> $GITHUB_ENV
+        echo MASTER_BRANCH="v${MAJOR_VERSION}.x/master" >> $GITHUB_ENV
+      shell: bash
+      
+    
+    - name: 'merge rc to master'
+      run: |
+        if [ "${{ inputs.merge-to-master }}" == "true" ];
+        then 
+            for x in $REPOS; do
+              curl \
+                -X POST \
+                -H "Accept: application/vnd.github.v3+json" \
+                -H "Authorization: token ${{ inputs.github-token }}" \
+                https://api.github.com/repos/zowe/$x/merges \
+                -d '{"base": "'"${MASTER_BRANCH}"'","head": "'"${RELEASE_BRANCH}"'", "commit_message":"Zowe Suite '"${CURRENT_VERSION}"'"}' \
+                -w "%{http_code}"
+            done
+        else
+          echo "Nothing to do here"
+        fi
+      shell: bash
+      
+    
+    - name: 'merge staging to rc'
+      run: |
+        if [ "${{ inputs.update-rc }}" == "true" ];
+        then
+            for val in $REPOS; do
+              if [ $val == "zowe-common-c" ]
+              then 
+                echo $val
+                base_url="https://api.github.com/repos/zowe/$val/merges"
+                curl \
+                -X POST \
+                -H "Accept: application/vnd.github.v3+json" \
+                -H "Authorization: token ${{ inputs.github-token }}" \
+                $base_url \
+                -d '{"base": "'"$RELEASE_BRANCH"'","head": "'"${{ inputs.zowe-common-c-head }}"'","commit_message":"Zowe Suite '"${CURRENT_VERSION}"'"}' \
+                -w "%{http_code}"
+              else
+                echo $val
+                base_url="https://api.github.com/repos/zowe/$val/merges"
+                curl \
+                -X POST \
+                -H "Accept: application/vnd.github.v3+json" \
+                -H "Authorization: token ${{ inputs.github-token }}" \
+                $base_url \
+                -d '{"base": "'"$RELEASE_BRANCH"'","head": "'"$STAGING_BRANCH"'","commit_message": "Zowe Suite '"${CURRENT_VERSION}"'"}' \
+                -w "%{http_code}"
+              fi
+            done
+        else
+          echo "Nothing to do here"
+        fi
+      shell: bash
+      
+    - name: 'create release'
+      run: |
+        if [ "${{ inputs.create-release }}" == "true" ]
+        then
+          for val in $REPOS; do
+              if [ $val == "zowe-common-c" ]
+              then
+                base_url="https://api.github.com/repos/zowe/$val/releases"
+                echo $val
+                curl \
+                -X POST \
+                -H "Accept: application/vnd.github.v3+json" \
+                -H "Authorization: token ${{ inputs.github-token }}" \
+                $base_url \
+                -d '{"tag_name": "zss-'"$CURRENT_VERSION"'","target_commitish": "'"$RELEASE_BRANCH"'","name": "ZSS '"$CURRENT_VERSION"'", "body": "", "draft": false, "prerelease": false}' \
+                -w "%{http_code}"
+                curl \
+                -X POST \
+                -H "Accept: application/vnd.github.v3+json" \
+                -H "Authorization: token ${{ inputs.github-token }}" \
+                $base_url \
+                -d '{"tag_name": "configmgr-'"$CURRENT_VERSION"'","target_commitish": "'"$RELEASE_BRANCH"'","name": "CONFIG MANAGER '"$CURRENT_VERSION"'", "body": "", "draft": false, "prerelease": false}' \
+                -w "%{http_code}"
+              else
+                base_url="https://api.github.com/repos/zowe/$val/releases"
+                echo $val
+                echo $CURRENT_VERSION
+                curl \
+                -X POST \
+                -H "Accept: application/vnd.github.v3+json" \
+                -H "Authorization: token ${{ inputs.github-token }}" \
+                $base_url \
+                -d '{"tag_name": "'"$CURRENT_VERSION"'","target_commitish": "'"$RELEASE_BRANCH"'","name": "'"$CURRENT_VERSION"'", "body": "", "draft": false, "prerelease": false}' \
+                -w "%{http_code}"
+            fi
+          done
+        else
+         echo 'nothing to do'
+        fi   
+      shell: bash        
+      
+

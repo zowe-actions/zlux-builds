@@ -1,3 +1,5 @@
+
+
 const fs = require('fs')
 const Debug = require('debug')
 const InvalidArgumentException = require('./invalid-argument-exception.js')
@@ -26,7 +28,7 @@ class pax{
 		const jclBuildNumber = args.get('jclBuildNumber')
 		const paxName = args.get('paxName')
 		const mvdHomeDir = args.get('mvdHomeDir')
-		const maristNode = args.get('maristNode')
+		const buildZSS = args.get('buildZSS')
 		
 
         var paxLocalWorkspace = args.get('paxLocalWorkspace')
@@ -67,9 +69,9 @@ class pax{
 		if (!mvdHomeDir){
             throw new InvalidArgumentException('mvdHomeDir')
         }
-		if (!maristNode){
-			throw new InvalidArgumentException('maristNode')
-		}
+		if (!buildZSS){
+            throw new InvalidArgumentException('buildZSS')
+        }
 		
 		try {
             // Step 1: make packaging folder
@@ -79,49 +81,64 @@ class pax{
             console.log(`[Step 1]: make folder created `)
 
             // Step 2: sand tar files over
-			var cmd2 = `put ${mvdHomeDir}/zowe-install-packaging/bin/utils/tag-files.sh ${paxRemoteWorkspace}/${paxName}-${currentBranch}-${jclBuildNumber}/tag-files.sh
-put ${mvdHomeDir}/zlux.tar ${paxRemoteWorkspace}/${paxName}-${currentBranch}-${jclBuildNumber}/zlux.tar			`
+			if (buildZSS == 'false'){
+				var cmd2 = `put ${mvdHomeDir}/plugin.tar ${paxRemoteWorkspace}/${paxName}-${currentBranch}-${jclBuildNumber}/plugin.tar
+put ${mvdHomeDir}/zlux-build.tar ${paxRemoteWorkspace}/${paxName}-${currentBranch}-${jclBuildNumber}/zlux-build.tar
+put ${mvdHomeDir}/zowe-install-packaging/bin/utils/tag-files.sh ${paxRemoteWorkspace}/${paxName}-${currentBranch}-${jclBuildNumber}/tag-files.sh`
+			}
+			if (buildZSS == 'true'){
+				var cmd2 = `put ${mvdHomeDir}/plugin.tar ${paxRemoteWorkspace}/${paxName}-${currentBranch}-${jclBuildNumber}/plugin.tar
+put ${mvdHomeDir}/zlux-build.tar ${paxRemoteWorkspace}/${paxName}-${currentBranch}-${jclBuildNumber}/zlux-build.tar
+put ${mvdHomeDir}/zowe-install-packaging/bin/utils/tag-files.sh ${paxRemoteWorkspace}/${paxName}-${currentBranch}-${jclBuildNumber}/tag-files.sh
+put ${mvdHomeDir}/zss.tar ${paxRemoteWorkspace}/${paxName}-${currentBranch}-${jclBuildNumber}/zss.tar 
+put ${mvdHomeDir}/zowe-common-c.tar ${paxRemoteWorkspace}/${paxName}-${currentBranch}-${jclBuildNumber}/zowe-common-c.tar`
+			}
 			utils.sftp(paxSSHHost,paxSSHPort,paxSSHUsername,paxSSHPassword,cmd2)
-            console.log(`[Step 2]: sftp put zlux.tar and tag-files.sh completed`)
+            console.log(`[Step 2]: sftp put plugin.tar and zlux-build.tar completed`)
 
 			// step 3: package
+			if (buildZSS == 'false'){
             var cmd3 = `cd ${paxRemoteWorkspace}/${paxName}-${currentBranch}-${jclBuildNumber}
-export _BPXK_AUTOCVT=ON
-chtag -tc iso8859-1 tag-files.sh 
-chmod +x tag-files.sh 
-mkdir -p zlux/share && cd zlux 
-mkdir bin && cd share 
-tar xpoUf ../../zlux.tar 
-../../tag-files.sh . 
-cd zlux-server-framework 
-rm -rf node_modules 
-export NODE_HOME=${maristNode}
-_TAG_REDIR_ERR=txt _TAG_REDIR_IN=txt _TAG_REDIR_OUT=txt __UNTAGGED_READ_MODE=V6 PATH=${maristNode}/bin:.:/bin npm --verbose install --cache /ZOWE/tmp/.npm
-_TAG_REDIR_ERR=txt _TAG_REDIR_IN=txt _TAG_REDIR_OUT=txt __UNTAGGED_READ_MODE=V6 PATH=${maristNode}/bin:.:/bin npm prune --omit=dev
-cd .. 
-iconv -f iso8859-1 -t 1047 zlux-app-server/defaults/serverConfig/server.json > zlux-app-server/defaults/serverConfig/server.json.1047 
-mv zlux-app-server/defaults/serverConfig/server.json.1047 zlux-app-server/defaults/serverConfig/server.json 
-chtag -tc 1047 zlux-app-server/defaults/serverConfig/server.json 
-cd zlux-app-server/bin 
-cp start.sh configure.sh ../../../bin 
-if [ -e "validate.sh" ]; then
-  cp validate.sh ../../../bin
-fi
-cd ..
-if [ -e "manifest.yaml" ]; then
-  cp manifest.yaml ../../
-fi
-if [ -d "schemas" ]; then
-  cp -r schemas ../../
-fi
-cd ../../
-chmod -R 755 *
-pax -o saveext -pp -wf ../zlux.pax *`
+chtag -tc iso8859-1 tag-files.sh
+chmod +x tag-files.sh
+mkdir plugin && cd plugin
+tar xpoUf ../plugin.tar
+rm ../plugin.tar
+_BPXK_AUTOCVT=ON ../tag-files.sh .
+pax -o saveext -pp -wf ../plugin.pax *
+mkdir ../zlux-build
+tar xpoUf ../zlux-build.tar
+rm ../zlux-build.tar
+_BPXK_AUTOCVT=ON ../tag-files.sh .`
+			}
+			if (buildZSS == 'true'){
+            var cmd3 = `cd ${paxRemoteWorkspace}/${paxName}-${currentBranch}-${jclBuildNumber}
+chtag -tc iso8859-1 tag-files.sh
+chmod +x tag-files.sh
+mkdir zss zowe-common-c 
+cd zss && tar xpoUf ../zss.tar
+chtag -R -tc ISO8859-1 * 
+cd ../zowe-common-c && tar xpoUf ../zowe-common-c.tar
+chtag -R -tc ISO8859-1 *
+cd ../
+rm -rf zss.tar zowe-common-c.tar
+mkdir plugin && cd plugin
+tar xpoUf ../plugin.tar
+rm ../plugin.tar
+cd zssServer/src/ && chtag -tc ISO8859-1 *
+cd ../build && chtag -R -tc ISO8859-1 *
+_BPXK_AUTOCVT=ON ZSS=../../../../zss ./build.sh && cd ../..
+_BPXK_AUTOCVT=ON ../tag-files.sh .
+pax -o saveext -pp -wf ../plugin.pax *
+mkdir ../zlux-build
+tar xpoUf ../zlux-build.tar
+rm ../zlux-build.tar `
+			}
             utils.ssh(paxSSHHost,paxSSHPort,paxSSHUsername,paxSSHPassword,cmd3)
             console.log('[Step 3]: packaging completed')
 			
 			// step 4: copy back pax file
-			var cmd4 = `get ${paxRemoteWorkspace}/${paxName}-${currentBranch}-${jclBuildNumber}/zlux.pax ${mvdHomeDir}/zlux.pax`
+			var cmd4 = `get ${paxRemoteWorkspace}/${paxName}-${currentBranch}-${jclBuildNumber}/plugin.pax ${mvdHomeDir}/plugin.pax`
 			utils.sftp(paxSSHHost,paxSSHPort,paxSSHUsername,paxSSHPassword,cmd4)
             console.log('[Step 4]: copy back files completed')
 			
@@ -137,5 +154,6 @@ pax -o saveext -pp -wf ../zlux.pax *`
         return `${paxRemoteWorkspace}/${paxName}-${currentBranch}-${jclBuildNumber}/plugin.pax`
     } //PACK
 }
+
 
 module.exports = pax;

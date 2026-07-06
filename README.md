@@ -6,4 +6,4 @@ This repository contains Actions that relates to building zlux-core, zlux-plugin
 
 1) You must run `npm update` on the root directory.
 
-2) Run `ncc-build-all.sh` - this script goes through each subdirectories and run `ncc build` command.
+2) Run `npm run build` - this script goes through each subdirectories and run `ncc build` command.
