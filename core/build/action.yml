@@ -94,7 +94,7 @@ runs:
         
     - name: 'set version'
       run: |
-        version=$(echo $ZOWE_VERSION | grep -o '[^-]*$')
+        version=$(echo $ZOWE_VERSION | grep -o '^[^-]*')
         majorVersion=$(echo $version | cut -d. -f1)
         minorVersion=$(echo $version | cut -d. -f2)
         microVersion=$(echo $version | cut -d. -f3)
@@ -135,6 +135,7 @@ runs:
                      -e "s|{{build\\.number}}|${JFROG_CLI_BUILD_NUMBER}|g" \
                      -e "s|{{build\\.commitHash}}|${commit_hash}|g" \
                      -e "s|{{build\\.timestamp}}|${current_timestamp}|g" \
+                     -e "s|{{build\\.version}}|${ZOWE_VERSION}|g" \
                      "manifest.yaml"
             echo "manifest is:"
             cat manifest.yaml
@@ -152,13 +153,13 @@ runs:
 
     - name: 'test'
       run: |
-        if [ -n ${{ github.event.pull_request.number }} &&  "$REPOSITORY_NAME" != "zlux-app-server"]
+        if [[ -n "${{ github.event.pull_request.number }}" && "$REPOSITORY_NAME" != "zlux-app-server" ]]
         then
           cd dist
           packages=$(find ./${REPOSITORY_NAME} -name package.json | { grep -v node_modules || true; })
-          for package in \$packages
+          for package in $packages
           do
-            sh -c "cd `dirname \$package` && npm run test --if-present"
+            sh -c "cd $(dirname $package) && npm run test --if-present"
           done
         fi
       shell: bash 

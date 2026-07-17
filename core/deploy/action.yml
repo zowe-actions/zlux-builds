@@ -3,8 +3,10 @@ description: "This action deploys the pax and tar in artifactory"
 
 inputs:
   source_repo:
+    description: 'The source repository that triggered this build (passed from external workflow)'
     required: false
   source_pr:
+    description: 'The source PR number that triggered this build (passed from external workflow)'
     required: false
 
 
@@ -16,28 +18,41 @@ runs:
         TIMESTAMP=$(date +%Y%m%d.%H%M%S)
         mv zlux.pax ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.pax
         mv zlux.tar ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.tar
+
+        # Scenario 1: Custom build with multiple PRs merged (inputs provided to build action)
+        # Path clearly shows it's a CUSTOM multi-PR build, which repo triggered it, and the build number
         if [ -n "${CUSTOM_PR}" ]; then
-          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.pax \
-            ${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-${JFROG_CLI_BUILD_NUMBER}-${DEPLOY_BRANCH}-${REPOSITORY_NAME}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.pax
-          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.tar \
-            ${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-${JFROG_CLI_BUILD_NUMBER}-${DEPLOY_BRANCH}-${REPOSITORY_NAME}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.tar
-        elif [ -n "${INPUT_SOURCE_PR}" ]; then
-          REPOSITORY_NAME="${INPUT_SOURCE_REPO}"
-          CURRENT_PR="${INPUT_SOURCE_PR}"
-          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.pax \
-            ${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-${REPOSITORY_NAME}-PR-${CURRENT_PR}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.pax
-          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.tar \
-            ${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-${REPOSITORY_NAME}-PR-${CURRENT_PR}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.tar
+          DEPLOY_DIR="zlux-core/${ZOWE_VERSION}-CUSTOM-${REPOSITORY_NAME}-${JFROG_CLI_BUILD_NUMBER}"
+          PAX_PATH="${ARTIFACTORY_REPO}/${DEPLOY_DIR}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.pax"
+          TAR_PATH="${ARTIFACTORY_REPO}/${DEPLOY_DIR}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.tar"
+
+        # Scenario 2: Build triggered by an external workflow passing source repo/PR info
+        elif [ -n "${{ inputs.source_pr }}" ]; then
+          SOURCE_REPO="${{ inputs.source_repo }}"
+          SOURCE_PR="${{ inputs.source_pr }}"
+          DEPLOY_DIR="zlux-core/${ZOWE_VERSION}-${SOURCE_REPO}-PR-${SOURCE_PR}"
+          PAX_PATH="${ARTIFACTORY_REPO}/${DEPLOY_DIR}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.pax"
+          TAR_PATH="${ARTIFACTORY_REPO}/${DEPLOY_DIR}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.tar"
+
+        # Scenario 3: PR opened directly on the calling repo (e.g. zlux-app-server PR #45)
         elif [ -n "${{ github.event.pull_request.number }}" ]; then
           CURRENT_PR="${{ github.event.pull_request.number }}"
-          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.pax \
-            ${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-${REPOSITORY_NAME}-PR-${CURRENT_PR}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.pax
-          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.tar \
-            ${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-${REPOSITORY_NAME}-PR-${CURRENT_PR}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.tar
+          DEPLOY_DIR="zlux-core/${ZOWE_VERSION}-${REPOSITORY_NAME}-PR-${CURRENT_PR}"
+          PAX_PATH="${ARTIFACTORY_REPO}/${DEPLOY_DIR}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.pax"
+          TAR_PATH="${ARTIFACTORY_REPO}/${DEPLOY_DIR}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.tar"
+
+        # Scenario 4: Staging/branch build (push to v3.x/staging, no PR)
         else
-          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.pax \
-            ${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-${DEPLOY_BRANCH^^}-ZLUX-CORE/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.pax
-          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.tar \
-            ${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-${DEPLOY_BRANCH^^}-ZLUX-CORE/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.tar
+          DEPLOY_DIR="zlux-core/${ZOWE_VERSION}-${DEPLOY_BRANCH^^}"
+          PAX_PATH="${ARTIFACTORY_REPO}/${DEPLOY_DIR}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.pax"
+          TAR_PATH="${ARTIFACTORY_REPO}/${DEPLOY_DIR}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.tar"
         fi
+
+        echo "=========================================="
+        echo "Deploy destination:"
+        echo "  PAX: ${PAX_PATH}"
+        echo "  TAR: ${TAR_PATH}"
+        echo "=========================================="
+        jfrog rt u "${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.pax" "${PAX_PATH}"
+        jfrog rt u "${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.tar" "${TAR_PATH}"
       shell: bash
