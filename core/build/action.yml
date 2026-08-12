@@ -175,7 +175,8 @@ runs:
         mkdir clone && cd clone
         git clone https://github.com/zowe/zowe-install-packaging.git -b v2.x/master
         ZOWE_V2_VERSION=$(cat zowe-install-packaging/manifest.json.template  \
-          | grep version \
+          | grep '"org.zowe.zlux.zlux-core": {' -A 10 \
+          | grep '"version":' \
           | head -1 \
           | awk -F: '{ print $2 }' \
           | sed 's/[", ]//g')
@@ -186,8 +187,8 @@ runs:
           | awk -F: '{ print $2 }' \
           | sed 's/[", ]//g' \
           | sed 's/\.pax$/.tar/')
-        # curl "https://zowe.jfrog.io/zowe/list/libs-snapshot-local/org/zowe/zlux/zlux-core/${ZOWE_V2_VERSION}-RC/${ZLUX_CORE_PAX_V2}" -L -k -o zlux.tar
-        curl "https://zowe.jfrog.io/zowe/list/libs-snapshot-local/org/zowe/zlux/zlux-core/2.18.5-RC/${ZLUX_CORE_PAX_V2}" -L -k -o zlux.tar
+        curl "https://zowe.jfrog.io/zowe/list/libs-snapshot-local/org/zowe/zlux/zlux-core/${ZOWE_V2_VERSION}/${ZLUX_CORE_PAX_V2}" -L -k -o zlux.tar
+        # curl "https://zowe.jfrog.io/zowe/list/libs-snapshot-local/org/zowe/zlux/zlux-core/2.18.5-RC/${ZLUX_CORE_PAX_V2}" -L -k -o zlux.tar
         tar xpoUf zlux.tar 
         cd zlux-app-manager/system-apps
         for app_folder in */
