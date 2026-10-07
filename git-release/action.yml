@@ -56,10 +56,19 @@ runs:
           echo STAGING_BRANCH="v1.x/staging" >> $GITHUB_ENV
           echo RELEASE_BRANCH="v1.x/rc" >> $GITHUB_ENV
           echo MASTER_BRANCH="v1.x/master" >> $GITHUB_ENV
-        else
+        elif [ ${CURRENT_VERSION:1:1} == 2 ];
+        then
           echo STAGING_BRANCH="v2.x/staging" >> $GITHUB_ENV
           echo RELEASE_BRANCH="v2.x/rc" >> $GITHUB_ENV
           echo MASTER_BRANCH="v2.x/master" >> $GITHUB_ENV
+        elif [ ${CURRENT_VERSION:1:1} == 3 ];
+        then
+          echo STAGING_BRANCH="v3.x/staging" >> $GITHUB_ENV
+          echo RELEASE_BRANCH="v3.x/rc" >> $GITHUB_ENV
+          echo MASTER_BRANCH="v3.x/master" >> $GITHUB_ENV
+        else
+          echo "Version not supported."
+          exit 1
         fi
       shell: bash
       
