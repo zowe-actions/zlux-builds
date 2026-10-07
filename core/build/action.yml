@@ -50,12 +50,12 @@ runs:
           echo "Set version to:"
           cat version.properties
           cd ../zlux-app-server
-          export commit_hash=$(git rev-parse --short "$GITHUB_SHA")
+          export commit_hash=$(git rev-parse --short HEAD)
           export current_timestamp=$(date +%s%3N)
           export zlux_version="${majorVersion}.${minorVersion}.${microVersion}"
           echo $commit_hash
           echo $current_timestamp
-          sed -i -e "s|{{build\\.branch}}|v3.x/staging|g" \
+          sed -i -e "s|{{build\\.branch}}|${CURRENT_BRANCH}|g" \
                 -e "s|{{build\\.number}}|${JFROG_CLI_BUILD_NUMBER}|g" \
                 -e "s|{{build\\.commitHash}}|${commit_hash}|g" \
                 -e "s|{{build\\.timestamp}}|${current_timestamp}|g" \
@@ -73,12 +73,13 @@ runs:
           cd $app_folder
           if [ -e "manifest.yaml" ]; then
             echo "In $app_folder"
-            export commit_hash=$(git rev-parse --short "$GITHUB_SHA")
+            export commit_hash=$(git rev-parse --short HEAD)
             export current_timestamp=$(date +%s%3N)
-            sed -i -e "s|{{build\\.branch}}|v3.x/staging|g" \
+            sed -i -e "s|{{build\\.branch}}|${CURRENT_BRANCH}|g" \
                      -e "s|{{build\\.number}}|${JFROG_CLI_BUILD_NUMBER}|g" \
                      -e "s|{{build\\.commitHash}}|${commit_hash}|g" \
                      -e "s|{{build\\.timestamp}}|${current_timestamp}|g" \
+                     -e "s|{{build\\.version}}|${ZOWE_VERSION}|g" \
                      "manifest.yaml"
             echo "manifest is:"
             cat manifest.yaml
@@ -90,13 +91,14 @@ runs:
     - name: 'build'
       run: |
         cd zlux/zlux-build
-        bash -c set -o pipefail && ant production 2>&1 | grep -vE "^\s+\[exec\]\s+0\% compiling"
+        set -o pipefail
+        bash scripts/bash/production.sh 2>&1 | grep -vE "^\s+\[exec\]\s+0\% compiling"
       shell: bash 
       
     - name: 'remove source'
       run: |
         cd zlux/zlux-build 
-        ant -Dcapstone=../../dist removeSource
+        CAPSTONE="$(cd ../.. && pwd)/dist" bash scripts/bash/build_ng2.sh removeSource
       shell: bash 
       
     - name: 'clone v2'
