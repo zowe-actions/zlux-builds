@@ -13,8 +13,15 @@ inputs:
   default-base:
     description: 'base branch to build from'
     required: false
-  zowe-version:
+  zowe-major-version:
     description: 'Zowe major version override (2, 3, etc.). Auto-detected from branch if not set.'
+    required: false
+  rc:
+    description: 'Set to true to build a release candidate from the vX.x/rc branches'
+    required: false
+    default: 'false'
+  release-version:
+    description: 'Full release version (X.Y.Z). Overrides the version read from the Zowe manifest.'
     required: false
 
 runs:
@@ -50,8 +57,8 @@ runs:
     - name: 'detect zowe major version and load config'
       run: |
         # Determine the Zowe major version
-        if [ -n "${{ inputs.zowe-version }}" ]; then
-          ZOWE_MAJOR_VERSION="${{ inputs.zowe-version }}"
+        if [ -n "${{ inputs.zowe-major-version }}" ]; then
+          ZOWE_MAJOR_VERSION="${{ inputs.zowe-major-version }}"
         else
           # Auto-detect from CURRENT_BRANCH (e.g., v3.x/staging -> 3, v2.x/rc -> 2)
           ZOWE_MAJOR_VERSION=$(echo "$CURRENT_BRANCH" | sed -n 's/^v\([0-9]*\)\..*/\1/p')
@@ -74,6 +81,16 @@ runs:
           echo "Available configs:"
           ls "$CONFIG_DIR"/*.env 2>/dev/null || echo "  (none)"
           exit 1
+        fi
+
+        # A release candidate builds the vX.x/rc branches; these overrides must
+        # come after the config file so they take precedence.
+        if [ "${{ inputs.rc }}" = "true" ]; then
+          echo "IS_RC=true" >> $GITHUB_ENV
+          echo "CURRENT_BRANCH=v${ZOWE_MAJOR_VERSION}.x/rc" >> $GITHUB_ENV
+          echo "ZOWE_MANIFEST_BRANCH=v${ZOWE_MAJOR_VERSION}.x/rc" >> $GITHUB_ENV
+          echo "DEFAULT_PLUGIN_BRANCH=v${ZOWE_MAJOR_VERSION}.x/rc" >> $GITHUB_ENV
+          echo "Release candidate build: using v${ZOWE_MAJOR_VERSION}.x/rc branches"
         fi
       shell: bash
     
@@ -98,6 +115,11 @@ runs:
     
     - name: 'get Zowe version'
       run: |
+        if [ -n "${{ inputs.release-version }}" ]; then
+          echo "ZOWE_VERSION=${{ inputs.release-version }}" | tr -d ' ' >> $GITHUB_ENV
+          echo "Using supplied release version: ${{ inputs.release-version }}"
+          exit 0
+        fi
         git clone --branch "$ZOWE_MANIFEST_BRANCH" https://github.com/zowe/zowe-install-packaging.git
         ZOWE_VERSION=$(cat zowe-install-packaging/manifest.json.template  \
           | grep version \

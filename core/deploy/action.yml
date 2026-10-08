@@ -3,8 +3,10 @@ description: "This action deploys the pax and tar in artifactory"
 
 inputs:
   source_repo:
+    description: 'The source repository that triggered this build (passed from external workflow)'
     required: false
   source_pr:
+    description: 'The source PR number that triggered this build (passed from external workflow)'
     required: false
 
 
@@ -16,28 +18,52 @@ runs:
         TIMESTAMP=$(date +%Y%m%d.%H%M%S)
         mv zlux.pax ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.pax
         mv zlux.tar ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.tar
-        if [ -n "${CUSTOM_PR}" ]; then
-          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.pax \
-            ${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-${JFROG_CLI_BUILD_NUMBER}-${DEPLOY_BRANCH}-${REPOSITORY_NAME}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.pax
-          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.tar \
-            ${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-${JFROG_CLI_BUILD_NUMBER}-${DEPLOY_BRANCH}-${REPOSITORY_NAME}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.tar
-        elif [ -n "${INPUT_SOURCE_PR}" ]; then
-          REPOSITORY_NAME="${INPUT_SOURCE_REPO}"
-          CURRENT_PR="${INPUT_SOURCE_PR}"
-          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.pax \
-            ${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-${REPOSITORY_NAME}-PR-${CURRENT_PR}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.pax
-          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.tar \
-            ${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-${REPOSITORY_NAME}-PR-${CURRENT_PR}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.tar
+
+        # Release candidate. zowe-install-packaging consumes this exact path,
+        # so it must stay '<version>-RC'.
+        if [ "${IS_RC}" = "true" ]; then
+          DEPLOY_DIR="zlux-core/${ZOWE_VERSION}-RC"
+
+        # Custom build with one or more extra PRs merged in
+        elif [ -n "${CUSTOM_PR}" ]; then
+          DEPLOY_DIR="zlux-core/${ZOWE_VERSION}-CUSTOM-${REPOSITORY_NAME}-${JFROG_CLI_BUILD_NUMBER}"
+
+        # Build triggered by an external workflow passing source repo/PR info
+        elif [ -n "${{ inputs.source_pr }}" ]; then
+          DEPLOY_DIR="zlux-core/${ZOWE_VERSION}-${{ inputs.source_repo }}-PR-${{ inputs.source_pr }}"
+
+        # PR opened directly on the calling repo (e.g. zlux-app-server PR #45)
         elif [ -n "${{ github.event.pull_request.number }}" ]; then
-          CURRENT_PR="${{ github.event.pull_request.number }}"
-          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.pax \
-            ${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-${REPOSITORY_NAME}-PR-${CURRENT_PR}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.pax
-          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.tar \
-            ${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-${REPOSITORY_NAME}-PR-${CURRENT_PR}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.tar
+          DEPLOY_DIR="zlux-core/${ZOWE_VERSION}-${REPOSITORY_NAME}-PR-${{ github.event.pull_request.number }}"
+
+        # Branch build (e.g. push to v3.x/staging)
         else
-          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.pax \
-            ${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-${DEPLOY_BRANCH^^}-ZLUX-CORE/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.pax
-          jfrog rt u ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.tar \
-            ${ARTIFACTORY_REPO}/zlux-core/${ZOWE_VERSION}-${DEPLOY_BRANCH^^}-ZLUX-CORE/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.tar
+          DEPLOY_DIR="zlux-core/${ZOWE_VERSION}-${DEPLOY_BRANCH^^}"
         fi
+
+        PAX_PATH="${ARTIFACTORY_REPO}/${DEPLOY_DIR}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.pax"
+        TAR_PATH="${ARTIFACTORY_REPO}/${DEPLOY_DIR}/zlux-core-${ZOWE_VERSION}-${TIMESTAMP}.tar"
+
+        echo "=========================================="
+        echo "Deploy destination:"
+        echo "  PAX: ${PAX_PATH}"
+        echo "  TAR: ${TAR_PATH}"
+        echo "=========================================="
+        jfrog rt u "${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.pax" "${PAX_PATH}"
+        jfrog rt u "${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.tar" "${TAR_PATH}"
+      shell: bash
+
+    - name: 'report build status'
+      run: |
+        curl -s -X POST \
+          -H "Authorization: token ${{ github.token }}" \
+          -H "Accept: application/vnd.github.v3+json" \
+          "https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.event.pull_request.head.sha || github.sha }}" \
+          -d '{
+            "state": "success",
+            "context": "build",
+            "description": "ZLUX Core build succeeded",
+            "target_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          }'
+        echo "Reported 'build' commit status as success"
       shell: bash
