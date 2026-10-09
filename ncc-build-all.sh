@@ -1,9 +1,5 @@
 #!/usr/bin/env bash
 
-# Compiles every JS action into its dist/ bundle.
-#
-# Uses the ncc pinned in devDependencies rather than a global install, so the
-# committed bundles don't change depending on whose machine built them.
 
 set -euo pipefail
 
