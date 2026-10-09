@@ -1,19 +1,33 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
-# This script iterates through all sub actions and run ncc command to compile and build javascript
+# Compiles every JS action into its dist/ bundle.
+#
+# Uses the ncc pinned in devDependencies rather than a global install, so the
+# committed bundles don't change depending on whose machine built them.
 
-for file in $(find . -type f -name "index.js" -maxdepth 2)
-do
-    cd $(echo $file | cut -d'/' -f 2)
-    ncc build index.js --license licenses.txt
-    cd ..
-done
+set -euo pipefail
 
-for file in $(find . -type f -name "ncc-build-all.sh" -maxdepth 2 -not -path "./ncc-build-all.sh")
-do
-    cd $(echo $file | cut -d'/' -f 2)
-    ./ncc-build-all.sh
-    cd ..
-done
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+NCC="$ROOT/node_modules/.bin/ncc"
+
+if [ ! -x "$NCC" ]; then
+  echo "ERROR: $NCC not found. Run 'npm ci' first." >&2
+  exit 1
+fi
+
+echo "Using ncc $("$NCC" version)"
+
+cd "$ROOT"
+
+# A JS action is a directory holding both an action manifest and an index.js;
+# this skips composite actions and the npm-registry library.
+while IFS= read -r manifest; do
+  dir="$(dirname "$manifest")"
+  [ -f "$dir/index.js" ] || continue
+  echo "==> building ${dir#./}"
+  ( cd "$dir" && "$NCC" build index.js --license licenses.txt )
+done < <(find . -type f \( -name 'action.yml' -o -name 'action.yaml' \) \
+           -not -path './node_modules/*' | sort)
+
 
 
