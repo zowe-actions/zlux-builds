@@ -72,56 +72,58 @@ class pax{
 		}
 		
 		try {
+			const paxWorkDir = `${paxRemoteWorkspace}/${paxName}-${currentBranch}-${jclBuildNumber}`
+
             // Step 1: make packaging folder
 			console.log('We are using new container')
-			var cmd = `rm -rf ${paxRemoteWorkspace}/${paxName}-${currentBranch}-${jclBuildNumber} && mkdir -p ${paxRemoteWorkspace}/${paxName}-${currentBranch}-${jclBuildNumber}`
+			var cmd = `rm -rf ${paxWorkDir} && mkdir -p ${paxWorkDir}`
             utils.ssh(paxSSHHost,paxSSHPort,paxSSHUsername,paxSSHPassword,cmd)
             console.log(`[Step 1]: make folder created `)
 
             // Step 2: sand tar files over
-			var cmd2 = `put ${mvdHomeDir}/zowe-install-packaging/bin/utils/tag-files.sh ${paxRemoteWorkspace}/${paxName}-${currentBranch}-${jclBuildNumber}/tag-files.sh
-put ${mvdHomeDir}/zlux.tar ${paxRemoteWorkspace}/${paxName}-${currentBranch}-${jclBuildNumber}/zlux.tar			`
+			var cmd2 = `put ${mvdHomeDir}/zowe-install-packaging/bin/utils/tag-files.sh ${paxWorkDir}/tag-files.sh
+put ${mvdHomeDir}/zlux.tar ${paxWorkDir}/zlux.tar			`
 			utils.sftp(paxSSHHost,paxSSHPort,paxSSHUsername,paxSSHPassword,cmd2)
             console.log(`[Step 2]: sftp put zlux.tar and tag-files.sh completed`)
 
 			// step 3: package
-            var cmd3 = `cd ${paxRemoteWorkspace}/${paxName}-${currentBranch}-${jclBuildNumber}
+			// Every path below is absolute. With relative 'cd ..' chains a single failed
+			// cd left the rest of the script running in the login directory, where
+			// 'chmod -R 755 *' then stripped permissions off the home dir (including
+			// ~/.ssh, which stopped sshd from accepting connections).
+            var cmd3 = `set -e
+cd ${paxWorkDir}
 export _BPXK_AUTOCVT=ON
 chtag -tc iso8859-1 tag-files.sh 
 chmod +x tag-files.sh 
-mkdir -p zlux/share && cd zlux 
-mkdir bin && cd share 
-tar xpoUf ../../zlux.tar 
-../../tag-files.sh . 
-cd zlux-server-framework 
-rm -rf node_modules 
+mkdir -p ${paxWorkDir}/zlux/share ${paxWorkDir}/zlux/bin
+cd ${paxWorkDir}/zlux/share 
+tar xpoUf ${paxWorkDir}/zlux.tar 
+${paxWorkDir}/tag-files.sh . 
 export NODE_HOME=${maristNode}
+cd ${paxWorkDir}/zlux/share/zlux-server-framework 
+rm -rf node_modules 
 _TAG_REDIR_ERR=txt _TAG_REDIR_IN=txt _TAG_REDIR_OUT=txt __UNTAGGED_READ_MODE=V6 PATH=${maristNode}/bin:.:/bin npm --verbose install --cache /ZOWE/tmp/.npm
 _TAG_REDIR_ERR=txt _TAG_REDIR_IN=txt _TAG_REDIR_OUT=txt __UNTAGGED_READ_MODE=V6 PATH=${maristNode}/bin:.:/bin npm prune --omit=dev
-cd .. 
-iconv -f iso8859-1 -t 1047 zlux-app-server/defaults/serverConfig/server.json > zlux-app-server/defaults/serverConfig/server.json.1047 
-mv zlux-app-server/defaults/serverConfig/server.json.1047 zlux-app-server/defaults/serverConfig/server.json 
-chtag -tc 1047 zlux-app-server/defaults/serverConfig/server.json 
-cd zlux-app-server/bin 
-cp start.sh configure.sh ../../../bin 
-if [ -e "validate.sh" ]; then
-  cp validate.sh ../../../bin
+cd ${paxWorkDir}/zlux/share/zlux-app-server 
+cp bin/start.sh bin/configure.sh ${paxWorkDir}/zlux/bin 
+if [ -e "bin/validate.sh" ]; then
+  cp bin/validate.sh ${paxWorkDir}/zlux/bin
 fi
-cd ..
 if [ -e "manifest.yaml" ]; then
-  cp manifest.yaml ../../
+  cp manifest.yaml ${paxWorkDir}/zlux/
 fi
 if [ -d "schemas" ]; then
-  cp -r schemas ../../
+  cp -r schemas ${paxWorkDir}/zlux/
 fi
-cd ../../
-chmod -R 755 *
-pax -o saveext -pp -wf ../zlux.pax *`
+chmod -R 755 ${paxWorkDir}/zlux
+cd ${paxWorkDir}/zlux
+pax -o saveext -pp -wf ${paxWorkDir}/zlux.pax *`
             utils.ssh(paxSSHHost,paxSSHPort,paxSSHUsername,paxSSHPassword,cmd3)
             console.log('[Step 3]: packaging completed')
 			
 			// step 4: copy back pax file
-			var cmd4 = `get ${paxRemoteWorkspace}/${paxName}-${currentBranch}-${jclBuildNumber}/zlux.pax ${mvdHomeDir}/zlux.pax`
+			var cmd4 = `get ${paxWorkDir}/zlux.pax ${mvdHomeDir}/zlux.pax`
 			utils.sftp(paxSSHHost,paxSSHPort,paxSSHUsername,paxSSHPassword,cmd4)
             console.log('[Step 4]: copy back files completed')
 			
