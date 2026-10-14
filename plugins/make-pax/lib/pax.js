@@ -149,7 +149,7 @@ rm ../zlux-build.tar `
         } finally {
 			console.log('cleaning up all temporary')
 			var cmdClean = `rm -rf ${paxRemoteWorkspace}/${paxName}-${currentBranch}-${jclBuildNumber}`
-			utils.ssh(paxSSHHost,paxSSHPort,paxSSHUsername,paxSSHPassword,cmdClean)
+			utils.ssh(paxSSHHost,paxSSHPort,paxSSHUsername,paxSSHPassword,cmdClean, 1)
 			console.log(`Cleaning up remote workspace success`)
         } //FINALLY
         return `${paxRemoteWorkspace}/${paxName}-${currentBranch}-${jclBuildNumber}/plugin.pax`

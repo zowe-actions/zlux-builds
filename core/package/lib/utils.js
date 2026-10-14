@@ -13,6 +13,13 @@ const InvalidArgumentException = require('./invalid-argument-exception.js')
 const fs = require('fs')
 const semver = require('semver')
 
+// Retry configuration
+const MAX_RETRIES = 3
+const INITIAL_RETRY_DELAY_MS = 15000  // 15 seconds
+const SSH_CONNECT_TIMEOUT = 30        // seconds
+const SSH_SERVER_ALIVE_INTERVAL = 15  // seconds
+const SSH_SERVER_ALIVE_COUNT_MAX = 3
+
 class utils {
 
     static dateTimeNow() {
@@ -24,7 +31,35 @@ class utils {
     }
 
     static sh_heavyload(cmd) {
-        spawnSync(cmd, { stdio: 'inherit', shell: true})
+        const result = spawnSync(cmd, { stdio: 'inherit', shell: true })
+        if (result.status !== 0) {
+            throw new Error(`Command failed with exit code ${result.status}${result.signal ? ` (signal: ${result.signal})` : ''}`)
+        }
+        return result.status
+    }
+
+    static _sleep(ms) {
+        return spawnSync('sleep', [`${Math.ceil(ms / 1000)}`], { shell: true })
+    }
+
+    static _retry(operationName, fn, maxRetries = MAX_RETRIES) {
+        let lastError
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                console.log(`[Attempt ${attempt}/${maxRetries}] ${operationName}`)
+                fn()
+                return // success
+            } catch (err) {
+                lastError = err
+                console.warn(`[Attempt ${attempt}/${maxRetries}] ${operationName} FAILED: ${err.message}`)
+                if (attempt < maxRetries) {
+                    const delay = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt - 1)
+                    console.log(`  Retrying in ${delay / 1000}s...`)
+                    this._sleep(delay)
+                }
+            }
+        }
+        throw new Error(`${operationName} failed after ${maxRetries} attempts. Last error: ${lastError.message}`)
     }
 
     static fileExists(path) {
@@ -136,11 +171,18 @@ class utils {
         }
     }
 
-    static sftp(host, port, username, passwd, cmds) {
-        var fullCMD = `SSHPASS=${passwd} sshpass -e sftp -o BatchMode=no -o StrictHostKeyChecking=no -P ${port} -b - ${username}@${host} <<EOF
+    static sftp(host, port, username, passwd, cmds, maxRetries = MAX_RETRIES) {
+        const sshOpts = [
+            '-o BatchMode=no',
+            '-o StrictHostKeyChecking=no',
+            `-o ConnectTimeout=${SSH_CONNECT_TIMEOUT}`,
+            `-o ServerAliveInterval=${SSH_SERVER_ALIVE_INTERVAL}`,
+            `-o ServerAliveCountMax=${SSH_SERVER_ALIVE_COUNT_MAX}`,
+        ].join(' ')
+        const fullCMD = `SSHPASS=${passwd} sshpass -e sftp ${sshOpts} -P ${port} -b - ${username}@${host} <<EOF
 ${cmds}
 EOF`
-        this.sh_heavyload(fullCMD)
+        this._retry(`sftp to ${host}:${port}`, () => this.sh_heavyload(fullCMD), maxRetries)
     }
 
     static sftpKeyFile(server, keyPassPhrase, cmds) {
@@ -151,12 +193,19 @@ EOF`
         this.sh_heavyload(fullCMD)
     }
 
-    static ssh(host, port, username, passwd, cmds) {
-        var fullCMD = `SSHPASS=${passwd} sshpass -e ssh -tt -o StrictHostKeyChecking=no -p ${port} ${username}@${host} <<EOF
+    static ssh(host, port, username, passwd, cmds, maxRetries = MAX_RETRIES) {
+        const sshOpts = [
+            '-tt',
+            '-o StrictHostKeyChecking=no',
+            `-o ConnectTimeout=${SSH_CONNECT_TIMEOUT}`,
+            `-o ServerAliveInterval=${SSH_SERVER_ALIVE_INTERVAL}`,
+            `-o ServerAliveCountMax=${SSH_SERVER_ALIVE_COUNT_MAX}`,
+        ].join(' ')
+        const fullCMD = `SSHPASS=${passwd} sshpass -e ssh ${sshOpts} -p ${port} ${username}@${host} <<EOF
 ${cmds}
 exit 0
 EOF`
-        this.sh_heavyload(fullCMD)
+        this._retry(`ssh to ${host}:${port}`, () => this.sh_heavyload(fullCMD), maxRetries)
     }
 
     static sshKeyFile(server, keyPassPhrase, cmds) {
