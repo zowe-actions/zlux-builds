@@ -4,6 +4,7 @@ const InvalidArgumentException = require('./invalid-argument-exception.js')
 const utils = require('./utils.js')
 const PATH_CONTENT = 'content'
 const PATH_ASCII = 'ascii'
+const WHITELIST = /^[A-Za-z0-9._\/+@-]+$/
 
 class pax{
 
@@ -52,24 +53,24 @@ class pax{
         if (!paxLocalWorkspace){
             throw new InvalidArgumentException('paxLocalWorkspace')
         }
-        if (!paxRemoteWorkspace){
+        if (!paxRemoteWorkspace || !paxRemoteWorkspace.match(WHITELIST) || paxRemoteWorkspace.includes('..')){
             throw new InvalidArgumentException('paxRemoteWorkspace')
         }
-		if (!currentBranch){
+		if (!currentBranch || !currentBranch.match(WHITELIST)){
             throw new InvalidArgumentException('currentBranch')
         }
-		if (!jclBuildNumber){
+		if (!jclBuildNumber || !jclBuildNumber.match(WHITELIST)){
             throw new InvalidArgumentException('jclBuildNumber')
         }
-		if (!paxName){
+		if (!paxName || !paxName.match(WHITELIST) || paxName.includes('..')){
             throw new InvalidArgumentException('paxName')
         }
-		if (!mvdHomeDir){
+		if (!mvdHomeDir || !mvdHomeDir.match(WHITELIST) || mvdHomeDir.includes('..')){
             throw new InvalidArgumentException('mvdHomeDir')
         }
-		if (!maristNode){
-			throw new InvalidArgumentException('maristNode')
-		}
+		if (!maristNode || !maristNode.match(WHITELIST)){
+            throw new InvalidArgumentException('maristNode')
+        }
 		
 		try {
             // Step 1: make packaging folder
