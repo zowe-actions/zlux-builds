@@ -23,8 +23,13 @@ class utils {
         return execSync(cmd).toString().trim()
     }
 
-    static sh_heavyload(cmd) {
-        spawnSync(cmd, { stdio: 'inherit', shell: true})
+    static sh_heavyload(prog, args, stdin, envs) {
+        spawnSync(prog, args, {
+            input: stdin,
+            env: envs,
+            stdio: ['pipe', 'inherit', 'inherit'],
+            shell: false
+        })
     }
 
     static fileExists(path) {
@@ -137,34 +142,40 @@ class utils {
     }
 
     static sftp(host, port, username, passwd, cmds) {
-        var fullCMD = `SSHPASS=${passwd} sshpass -e sftp -o BatchMode=no -o StrictHostKeyChecking=no -P ${port} -b - ${username}@${host} <<EOF
-${cmds}
-EOF`
-        this.sh_heavyload(fullCMD)
+        this.sh_heavyload(
+            "sshpass",
+            ['-e', 'sftp', '-o', 'BatchMode=no', '-o', 'StrictHostKeyChecking=no', '-P', `${port}`, '-b', '-', '--', `${username}@${host}`],
+            cmds + "\n",
+            {...process.env, SSHPASS: passwd}
+        )
     }
 
     static sftpKeyFile(server, keyPassPhrase, cmds) {
-        var fullCMD = `SSHPASS=${keyPassPhrase} sshpass -e -P "passphrase for key" sftp ${server} <<EOF
-${cmds}
-exit 0
-EOF`
-        this.sh_heavyload(fullCMD)
+        this.sh_heavyload(
+            "sshpass",
+            ['-e', '-P', 'passphrase for key', 'sftp', `${server}`],
+            cmds + "\nexit 0\n",
+            {...process.env, SSHPASS: keyPassPhrase}
+        )
     }
 
     static ssh(host, port, username, passwd, cmds) {
-        var fullCMD = `SSHPASS=${passwd} sshpass -e ssh -tt -o StrictHostKeyChecking=no -p ${port} ${username}@${host} <<EOF
-${cmds}
-exit 0
-EOF`
-        this.sh_heavyload(fullCMD)
+        this.sh_heavyload(
+            "sshpass",
+            ['-e', 'ssh', '-tt', '-o', 'StrictHostKeyChecking=no', '-p', `${port}`, '--', `${username}@${host}`],
+            cmds + "\nexit 0\n",
+            {...process.env, SSHPASS: passwd}
+        )
+
     }
 
     static sshKeyFile(server, keyPassPhrase, cmds) {
-        var fullCMD = `SSHPASS=${keyPassPhrase} sshpass -e -P "passphrase for key" ssh ${server} <<EOF
-${cmds}
-exit 0
-EOF`
-        this.sh_heavyload(fullCMD)
+        this.sh_heavyload(
+            "sshpass",
+            ['-e', '-P', 'passphrase for key', 'ssh', `${server}`],
+            cmds + "\nexit 0\n",
+            {...process.env, SSHPASS: keyPassPhrase}
+        )
     }
 }
 
