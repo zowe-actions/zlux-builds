@@ -20,7 +20,7 @@ runs:
         echo MVD_HOME_DIR=$(pwd) >> $GITHUB_ENV
         # Derive the master branch from DEFAULT_PLUGIN_BRANCH context
         MASTER_BRANCH=$(echo "$DEFAULT_PLUGIN_BRANCH" | sed 's|/staging$|/master|; s|/rc$|/master|')
-        git clone -b "$MASTER_BRANCH" https://github.com/1000TurquoisePogs/zowe-install-packaging.git
+        git clone -b "$MASTER_BRANCH" https://github.com/zowe/zowe-install-packaging.git
         npm config set @zowe:registry https://zowe.jfrog.io/zowe/api/npm/npm-release/
         mkdir zlux
         cp -rf $REPOSITORY_NAME zlux/
