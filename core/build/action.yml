@@ -222,7 +222,7 @@ runs:
         cd ..
         # Derive the master branch for zowe-install-packaging from CURRENT_BRANCH
         MASTER_BRANCH=$(echo "$CURRENT_BRANCH" | sed 's|/staging$|/master|; s|/rc$|/master|')
-        git clone -b "$MASTER_BRANCH" https://github.com/1000TurquoisePogs/zowe-install-packaging.git
+        git clone -b "$MASTER_BRANCH" https://github.com/zowe/zowe-install-packaging.git
         export MVD_HOME_DIR=$(pwd) 
         echo MVD_HOME_DIR=$(pwd) >> $GITHUB_ENV
       shell: bash
