@@ -14,9 +14,12 @@ if (branch == ''){
 	// Default to v3 but can be overridden via input
 	branch = 'v3.x/staging'
 }
+github.assertSafeRef(branch, 'branch name')
+
 if (version == '') {
     version = 'MINOR'
 }
+version = utils.normalizeBumpVersion(version)
 
 
 // get temp folder for cloning

@@ -1,4 +1,3 @@
-const core = require('@actions/core')
 const utils = require('./lib/utils.js')
 const github = require('./lib/github.js')
 const Debug = require('debug')
@@ -6,17 +5,20 @@ const actionsGithub = require('@actions/github')
 
 
 
-var version = core.getInput('version')
-var branch = core.getInput('branch')
+var version = process.env.VERSION || ''
+var branch = process.env.BRANCH_NAME || ''
 var repo = actionsGithub.context.repo.owner + '/' + actionsGithub.context.repo.repo
 
 if (branch == ''){
 	// Default to v3 but can be overridden via input
 	branch = 'v3.x/staging'
 }
+github.assertSafeRef(branch, 'branch name')
+
 if (version == '') {
     version = 'MINOR'
 }
+version = utils.normalizeBumpVersion(version)
 
 
 // get temp folder for cloning

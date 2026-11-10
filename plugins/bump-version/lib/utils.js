@@ -4,6 +4,21 @@ const semver = require('semver')
 
 class utils {
 
+    // Validate caller-supplied versions before any repository operation.
+    static normalizeBumpVersion(version) {
+        if (typeof version !== 'string' || version !== version.trim()) {
+            throw new Error('Invalid version: expected MAJOR, MINOR, PATCH or a semantic version')
+        }
+        const level = version.toUpperCase()
+        if (['MAJOR', 'MINOR', 'PATCH'].includes(level)) {
+            return level
+        }
+        if (!semver.valid(version)) {
+            throw new Error('Invalid version: expected MAJOR, MINOR, PATCH or a semantic version')
+        }
+        return version
+    }
+
 	static sh(cmd, options = {}) {
         return execSync(cmd, options).toString().trim()
 	}
