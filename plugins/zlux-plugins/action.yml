@@ -29,7 +29,7 @@ runs:
         git clone https://github.com/zowe/zlux-app-manager.git -b $DEFAULT_PLUGIN_BRANCH
         git clone https://github.com/zowe/zlux-platform.git -b $DEFAULT_PLUGIN_BRANCH
         git clone https://github.com/zowe/zlux-build.git -b $DEFAULT_PLUGIN_BRANCH
-        if ${{ inputs.build-zss }}
+        if [ "$IN_BUILD_ZSS" = "true" ]
         then 
           git clone https://github.com/zowe/zss.git -b $DEFAULT_PLUGIN_BRANCH 
           git clone https://github.com/zowe/zowe-common-c.git -b $DEFAULT_PLUGIN_BRANCH
@@ -44,6 +44,8 @@ runs:
           echo BUILD_ZSS=false >> $GITHUB_ENV
           echo "Plugins doesn't contain zss code"
         fi
+      env:
+        IN_BUILD_ZSS: ${{ inputs.build-zss }}
       shell: bash
   
     
@@ -94,7 +96,7 @@ runs:
         framework_value=$(cat ../$REPOSITORY_NAME/pluginDefinition.json | grep -oP '"framework":\s*"\K[^"]+')
         if [[ "$framework_value" == "angular" || "$framework_value" == "angular2" ]]; then
           echo "this is angular plugin"
-          if [ "${{ inputs.clone-v2 }}" ]; then
+          if [ "$IN_CLONE_V2" ]; then
             mkdir -p ../zlux/v2clone && cd ../zlux/v2clone
             git clone -b v2.x/master https://github.com/zowe/zowe-install-packaging.git
             manifest_file="zowe-install-packaging/manifest.json.template"
@@ -121,6 +123,8 @@ runs:
         else
           echo "not angular"
         fi
+      env:
+        IN_CLONE_V2: ${{ inputs.clone-v2 }}
       shell: bash
     
     - name: 'remove source code'

@@ -45,8 +45,15 @@ runs:
         rm envvars.env
         mv envvars.env.new envvars.env
         cat envvars.env >> $GITHUB_ENV
-        echo CURRENT_VERSION=${{ inputs.release-version }} >> $GITHUB_ENV
+        # The version is written to $GITHUB_ENV and inserted into JSON request bodies
+        if [[ ! "$IN_RELEASE_VERSION" =~ ^[0-9A-Za-z][0-9A-Za-z._+-]*$ ]]; then
+          echo "ERROR: Invalid release-version: $IN_RELEASE_VERSION"
+          exit 1
+        fi
+        echo "CURRENT_VERSION=$IN_RELEASE_VERSION" >> $GITHUB_ENV
       working-directory: ${{ github.action_path }}
+      env:
+        IN_RELEASE_VERSION: ${{ inputs.release-version }}
       shell: bash
     
     - name: 'determine version'
@@ -66,13 +73,13 @@ runs:
     
     - name: 'merge rc to master'
       run: |
-        if [ "${{ inputs.merge-to-master }}" == "true" ];
+        if [ "$MERGE_TO_MASTER" == "true" ];
         then 
             for x in $REPOS; do
               curl \
                 -X POST \
                 -H "Accept: application/vnd.github.v3+json" \
-                -H "Authorization: token ${{ inputs.github-token }}" \
+                -H "Authorization: token $GH_TOKEN" \
                 https://api.github.com/repos/zowe/$x/merges \
                 -d '{"base": "'"${MASTER_BRANCH}"'","head": "'"${RELEASE_BRANCH}"'", "commit_message":"Zowe Suite '"${CURRENT_VERSION}"'"}' \
                 -w "%{http_code}"
@@ -80,13 +87,20 @@ runs:
         else
           echo "Nothing to do here"
         fi
+      env:
+        MERGE_TO_MASTER: ${{ inputs.merge-to-master }}
+        GH_TOKEN: ${{ inputs.github-token }}
       shell: bash
       
     
     - name: 'merge staging to rc'
       run: |
-        if [ "${{ inputs.update-rc }}" == "true" ];
+        if [ "$UPDATE_RC" == "true" ];
         then
+            if [[ -n "$COMMON_C_HEAD" && ! "$COMMON_C_HEAD" =~ ^[A-Za-z0-9][A-Za-z0-9._/@+#-]*$ ]]; then
+              echo "ERROR: Invalid zowe-common-c-head: $COMMON_C_HEAD"
+              exit 1
+            fi
             for val in $REPOS; do
               if [ $val == "zowe-common-c" ]
               then 
@@ -95,9 +109,9 @@ runs:
                 curl \
                 -X POST \
                 -H "Accept: application/vnd.github.v3+json" \
-                -H "Authorization: token ${{ inputs.github-token }}" \
+                -H "Authorization: token $GH_TOKEN" \
                 $base_url \
-                -d '{"base": "'"$RELEASE_BRANCH"'","head": "'"${{ inputs.zowe-common-c-head }}"'","commit_message":"Zowe Suite '"${CURRENT_VERSION}"'"}' \
+                -d '{"base": "'"$RELEASE_BRANCH"'","head": "'"$COMMON_C_HEAD"'","commit_message":"Zowe Suite '"${CURRENT_VERSION}"'"}' \
                 -w "%{http_code}"
               else
                 echo $val
@@ -105,7 +119,7 @@ runs:
                 curl \
                 -X POST \
                 -H "Accept: application/vnd.github.v3+json" \
-                -H "Authorization: token ${{ inputs.github-token }}" \
+                -H "Authorization: token $GH_TOKEN" \
                 $base_url \
                 -d '{"base": "'"$RELEASE_BRANCH"'","head": "'"$STAGING_BRANCH"'","commit_message": "Zowe Suite '"${CURRENT_VERSION}"'"}' \
                 -w "%{http_code}"
@@ -114,11 +128,15 @@ runs:
         else
           echo "Nothing to do here"
         fi
+      env:
+        UPDATE_RC: ${{ inputs.update-rc }}
+        COMMON_C_HEAD: ${{ inputs.zowe-common-c-head }}
+        GH_TOKEN: ${{ inputs.github-token }}
       shell: bash
       
     - name: 'create release'
       run: |
-        if [ "${{ inputs.create-release }}" == "true" ]
+        if [ "$CREATE_RELEASE" == "true" ]
         then
           for val in $REPOS; do
               if [ $val == "zowe-common-c" ]
@@ -128,14 +146,14 @@ runs:
                 curl \
                 -X POST \
                 -H "Accept: application/vnd.github.v3+json" \
-                -H "Authorization: token ${{ inputs.github-token }}" \
+                -H "Authorization: token $GH_TOKEN" \
                 $base_url \
                 -d '{"tag_name": "zss-'"$CURRENT_VERSION"'","target_commitish": "'"$RELEASE_BRANCH"'","name": "ZSS '"$CURRENT_VERSION"'", "body": "", "draft": false, "prerelease": false}' \
                 -w "%{http_code}"
                 curl \
                 -X POST \
                 -H "Accept: application/vnd.github.v3+json" \
-                -H "Authorization: token ${{ inputs.github-token }}" \
+                -H "Authorization: token $GH_TOKEN" \
                 $base_url \
                 -d '{"tag_name": "configmgr-'"$CURRENT_VERSION"'","target_commitish": "'"$RELEASE_BRANCH"'","name": "CONFIG MANAGER '"$CURRENT_VERSION"'", "body": "", "draft": false, "prerelease": false}' \
                 -w "%{http_code}"
@@ -146,7 +164,7 @@ runs:
                 curl \
                 -X POST \
                 -H "Accept: application/vnd.github.v3+json" \
-                -H "Authorization: token ${{ inputs.github-token }}" \
+                -H "Authorization: token $GH_TOKEN" \
                 $base_url \
                 -d '{"tag_name": "'"$CURRENT_VERSION"'","target_commitish": "'"$RELEASE_BRANCH"'","name": "'"$CURRENT_VERSION"'", "body": "", "draft": false, "prerelease": false}' \
                 -w "%{http_code}"
@@ -155,6 +173,9 @@ runs:
         else
          echo 'nothing to do'
         fi   
+      env:
+        CREATE_RELEASE: ${{ inputs.create-release }}
+        GH_TOKEN: ${{ inputs.github-token }}
       shell: bash        
       
 
