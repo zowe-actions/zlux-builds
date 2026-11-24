@@ -35903,9 +35903,54 @@ try {
  * Copyright IBM Corporation 2021
  */
 
+const { spawnSync } = __nccwpck_require__(8493)
+const fs = __nccwpck_require__(7147)
 const utils = __nccwpck_require__(862)
 
+const SAFE_REF = /^[A-Za-z0-9._/-]+$/
+const SAFE_REPO = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/
+
 class github {
+
+    /**
+     * Reject a branch name that is not a plain git ref, since it is passed to git commands
+     *
+     * @param  ref             the branch name to check
+     * @param  what            description of the value, used in the error message
+     */
+    static assertSafeRef(ref, what) {
+        if (typeof ref !== 'string' || !SAFE_REF.test(ref) || ref !== ref.trim() || ref.startsWith('-') || ref.includes('..')) {
+            throw new Error(`Invalid ${what}: only letters, digits, '.', '_', '-' and '/' are allowed, it must not start with '-' or contain '..'`)
+        }
+    }
+
+    /**
+     * Reject a repository name that is not in the form owner/name
+     *
+     * @param  repo            the repository name to check
+     */
+    static assertSafeRepo(repo) {
+        if (typeof repo !== 'string' || !SAFE_REPO.test(repo) || repo !== repo.trim()) {
+            throw new Error(`Invalid repository name: expected owner/name with letters, digits, '.', '_' and '-'`)
+        }
+    }
+
+    /**
+     * Run git with an argument list, without a shell
+     *
+     * @param  args            git arguments
+     * @param  workingDir      the working directory, optional
+     */
+    static _spawnGit(args, workingDir) {
+        const res = spawnSync('git', args, {cwd: workingDir, shell: false, stdio: ['ignore', 'pipe', 'inherit']})
+        if (res.error) {
+            throw res.error
+        }
+        if (res.status !== 0) {
+            throw new Error(`git ${args[0]} failed with exit code ${res.status}`)
+        }
+        return res.stdout.toString().trim()
+    }
 
     /**
      * Issue git command
@@ -35981,16 +36026,18 @@ class github {
             console.warn('Clone operation skipped, must specify both mandatory arguments: repo, dir')
         } 
         else {
-            var cmd = `mkdir -p ${dir} && git clone`
+            this.assertSafeRepo(repo)
+            var args = ['clone']
             if (branch) {
+                this.assertSafeRef(branch, 'branch name')
                 if (shallow) {
-                    cmd += ' --depth 1'
+                    args.push('--depth', '1')
                 }
-                cmd += ` --single-branch --branch ${branch}`
+                args.push('--single-branch', '--branch', branch)
             }
-            var fullRepo = ` https://github.com/${repo}.git ${dir}`
-            cmd += fullRepo
-            utils.sh(cmd)
+            args.push(`https://github.com/${repo}.git`, dir)
+            fs.mkdirSync(dir, {recursive: true})
+            this._spawnGit(args)
         }
     }
 
@@ -36005,7 +36052,16 @@ class github {
             console.warn('Hard reset operation skipped, must specify branch')
         } 
         else {
-            return this._cmd(workingDir, `reset --hard ${branch}`, quiet)
+            this.assertSafeRef(branch, 'branch name')
+            if (!workingDir) {
+                console.warn('Git operation skipped, must specify working directory')
+                return
+            }
+            const res = this._spawnGit(['reset', '--hard', branch], workingDir)
+            if (!quiet) {
+                console.log('>>> git reset --hard', branch, '\n', res, '\n<<<')
+            }
+            return res
         }
     }
 
@@ -36044,7 +36100,15 @@ class github {
      * @param  message         commit message
      */
     static commit(workingDir, message, quiet) {
-        return this._cmd(workingDir, `commit -s -m "${message}"`, quiet)
+        if (!workingDir) {
+            console.warn('Git operation skipped, must specify working directory')
+            return
+        }
+        const res = this._spawnGit(['commit', '-s', '-m', message], workingDir)
+        if (!quiet) {
+            console.log('>>> git commit', '\n', res, '\n<<<')
+        }
+        return res
     }
 
     /**
@@ -36058,7 +36122,13 @@ class github {
             console.warn('Push operation skipped, must specify argument: branch')
         } 
         else {
-            return this._cmd(dir, `push https://${username}:${passwd}@github.com/${repo} ${branch}`, quiet)
+            this.assertSafeRef(branch, 'branch name')
+            this.assertSafeRepo(repo)
+            const res = this._spawnGit(['push', `https://${username}:${passwd}@github.com/${repo}`, branch], dir)
+            if (!quiet) {
+                console.log('>>> git push', repo, branch, '\n', res, '\n<<<')
+            }
+            return res
         }
     }
 
@@ -36069,11 +36139,12 @@ class github {
      * @param  dir             the working directory, required
      */
     static isSync(branch, dir) {
+        this.assertSafeRef(branch, 'branch name')
         // update remote
-        utils.sh(`cd ${dir} && git fetch origin`)
+        this._spawnGit(['fetch', 'origin'], dir)
         // get last hash
-        var localHash = utils.sh(`cd ${dir} && git rev-parse ${branch}`)
-        var remoteHash = utils.sh(`cd ${dir} && git rev-parse origin/${branch}`)
+        var localHash = this._spawnGit(['rev-parse', '--verify', branch], dir)
+        var remoteHash = this._spawnGit(['rev-parse', '--verify', `origin/${branch}`], dir)
 
         if (localHash == remoteHash) {
             console.log('Working directory is synced with remote.')
@@ -36097,10 +36168,10 @@ class github {
             console.warn('createOrphanBranch operation skipped, must specify all three arguments: repo, dir and branch')
         }
         else {
-            var cmd = `mkdir -p ${dir} && cd ${dir}`
-            cmd += ` && git switch --orphan ${branch}`
-            cmd += ' && git commit --allow-empty -m "Initial commit on orphan branch"'
-            utils.sh(cmd)
+            this.assertSafeRef(branch, 'branch name')
+            fs.mkdirSync(dir, {recursive: true})
+            this._spawnGit(['switch', '--orphan', branch], dir)
+            this._spawnGit(['commit', '--allow-empty', '-m', 'Initial commit on orphan branch'], dir)
         }
     }
 }
@@ -36117,6 +36188,21 @@ const fs = __nccwpck_require__(7147)
 const semver = __nccwpck_require__(1503) 
 
 class utils {
+
+    // Validate caller-supplied versions before any repository operation.
+    static normalizeBumpVersion(version) {
+        if (typeof version !== 'string' || version !== version.trim()) {
+            throw new Error('Invalid version: expected MAJOR, MINOR, PATCH or a semantic version')
+        }
+        const level = version.toUpperCase()
+        if (['MAJOR', 'MINOR', 'PATCH'].includes(level)) {
+            return level
+        }
+        if (!semver.valid(version)) {
+            throw new Error('Invalid version: expected MAJOR, MINOR, PATCH or a semantic version')
+        }
+        return version
+    }
 
 	static sh(cmd, options = {}) {
         return execSync(cmd, options).toString().trim()
@@ -38204,11 +38290,15 @@ var branch = core.getInput('branch')
 var repo = actionsGithub.context.repo.owner + '/' + actionsGithub.context.repo.repo
 
 if (branch == ''){
+	// Default to v3 but can be overridden via input
 	branch = 'v3.x/staging'
 }
+github.assertSafeRef(branch, 'branch name')
+
 if (version == '') {
     version = 'MINOR'
 }
+version = utils.normalizeBumpVersion(version)
 
 
 // get temp folder for cloning
