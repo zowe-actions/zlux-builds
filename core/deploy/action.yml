@@ -15,6 +15,19 @@ runs:
   steps:
     - name: 'deploy'
       run: |
+        # source_repo/source_pr come from external workflows, restrict them to safe characters
+        if [[ -n "$SOURCE_PR" && ! "$SOURCE_PR" =~ ^[0-9]+$ ]]; then
+          echo "Invalid source_pr: must be a pull request number"
+          exit 1
+        fi
+        if [[ -n "$SOURCE_REPO" && ! "$SOURCE_REPO" =~ ^[A-Za-z0-9._-]+$ ]]; then
+          echo "Invalid source_repo: only letters, digits, '.', '_' and '-' are allowed"
+          exit 1
+        fi
+        if [[ -n "$PR_NUMBER" && ! "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+          echo "Invalid pull request number"
+          exit 1
+        fi
         TIMESTAMP=$(date +%Y%m%d.%H%M%S)
         mv zlux.pax ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.pax
         mv zlux.tar ${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.tar
@@ -29,12 +42,12 @@ runs:
           DEPLOY_DIR="zlux-core/${ZOWE_VERSION}-CUSTOM-${REPOSITORY_NAME}-${JFROG_CLI_BUILD_NUMBER}"
 
         # Build triggered by an external workflow passing source repo/PR info
-        elif [ -n "${{ inputs.source_pr }}" ]; then
-          DEPLOY_DIR="zlux-core/${ZOWE_VERSION}-${{ inputs.source_repo }}-PR-${{ inputs.source_pr }}"
+        elif [ -n "$SOURCE_PR" ]; then
+          DEPLOY_DIR="zlux-core/${ZOWE_VERSION}-$SOURCE_REPO-PR-$SOURCE_PR"
 
         # PR opened directly on the calling repo (e.g. zlux-app-server PR #45)
-        elif [ -n "${{ github.event.pull_request.number }}" ]; then
-          DEPLOY_DIR="zlux-core/${ZOWE_VERSION}-${REPOSITORY_NAME}-PR-${{ github.event.pull_request.number }}"
+        elif [ -n "$PR_NUMBER" ]; then
+          DEPLOY_DIR="zlux-core/${ZOWE_VERSION}-${REPOSITORY_NAME}-PR-$PR_NUMBER"
 
         # Branch build (e.g. push to v3.x/staging)
         else
@@ -51,19 +64,29 @@ runs:
         echo "=========================================="
         jfrog rt u "${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.pax" "${PAX_PATH}"
         jfrog rt u "${REPOSITORY_NAME}-${ZOWE_VERSION}-${TIMESTAMP}.tar" "${TAR_PATH}"
+      env:
+        SOURCE_REPO: ${{ inputs.source_repo }}
+        SOURCE_PR: ${{ inputs.source_pr }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
       shell: bash
 
     - name: 'report build status'
       run: |
         curl -s -X POST \
-          -H "Authorization: token ${{ github.token }}" \
+          -H "Authorization: token $GH_TOKEN" \
           -H "Accept: application/vnd.github.v3+json" \
-          "https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.event.pull_request.head.sha || github.sha }}" \
+          "https://api.github.com/repos/$GH_REPOSITORY/statuses/$COMMIT_SHA" \
           -d '{
             "state": "success",
             "context": "build",
             "description": "ZLUX Core build succeeded",
-            "target_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            "target_url": "'"$GH_SERVER_URL/$GH_REPOSITORY/actions/runs/$GH_RUN_ID"'"
           }'
         echo "Reported 'build' commit status as success"
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GH_REPOSITORY: ${{ github.repository }}
+        COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        GH_SERVER_URL: ${{ github.server_url }}
+        GH_RUN_ID: ${{ github.run_id }}
       shell: bash

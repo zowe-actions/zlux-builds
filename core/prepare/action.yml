@@ -41,24 +41,46 @@ runs:
     
     - name: 'determine current branch or PR'
       run: |
-        if [ -n "${{ inputs.default-base }}" ]
+        # Branch names are written to $GITHUB_ENV and used as git arguments:
+        # reject anything that could add variables or be read as an option.
+        check_branch() {
+          if [[ ! "$1" =~ ^[A-Za-z0-9][A-Za-z0-9._/@+#-]*$ ]]; then
+            echo "ERROR: Invalid branch name: $1"
+            exit 1
+          fi
+        }
+        if [ -n "$DEFAULT_BASE" ]
         then 
-          echo CURRENT_BRANCH=${{ inputs.default-base }} >> $GITHUB_ENV
-        elif [ -z "${{ github.event.pull_request.number }}" ]
+          check_branch "$DEFAULT_BASE"
+          echo "CURRENT_BRANCH=$DEFAULT_BASE" >> $GITHUB_ENV
+        elif [ -z "$PR_NUMBER" ]
         then
           echo CURRENT_BRANCH=${GITHUB_REF#refs/heads/} >> $GITHUB_ENV
         else
-          echo CURRENT_BRANCH=${{ github.event.pull_request.base.ref }} >> $GITHUB_ENV
-          echo CURRENT_PR=PR-${{ github.event.pull_request.number }} >> $GITHUB_ENV
+          if [[ ! "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "ERROR: Invalid pull request number: $PR_NUMBER"
+            exit 1
+          fi
+          check_branch "$PR_BASE_REF"
+          echo "CURRENT_BRANCH=$PR_BASE_REF" >> $GITHUB_ENV
+          echo "CURRENT_PR=PR-$PR_NUMBER" >> $GITHUB_ENV
         fi
         echo REPOSITORY_NAME=$GITHUB_REPOSITORY | sed 's/zowe\///' >> $GITHUB_ENV
+      env:
+        DEFAULT_BASE: ${{ inputs.default-base }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
       shell: bash
 
     - name: 'resolve build target'
       run: |
         # Major version selects which config/vN.env to load
-        if [ -n "${{ inputs.zowe-major-version }}" ]; then
-          ZOWE_MAJOR_VERSION="${{ inputs.zowe-major-version }}"
+        if [ -n "$IN_ZOWE_MAJOR_VERSION" ]; then
+          if [[ ! "$IN_ZOWE_MAJOR_VERSION" =~ ^[0-9]+$ ]]; then
+            echo "ERROR: zowe-major-version must be a number: $IN_ZOWE_MAJOR_VERSION"
+            exit 1
+          fi
+          ZOWE_MAJOR_VERSION="$IN_ZOWE_MAJOR_VERSION"
         else
           # Auto-detect from CURRENT_BRANCH (e.g., v3.x/staging -> 3, v2.x/rc -> 2)
           ZOWE_MAJOR_VERSION=$(echo "$CURRENT_BRANCH" | sed -n 's/^v\([0-9]*\)\..*/\1/p')
@@ -68,10 +90,10 @@ runs:
           fi
         fi
 
-        CONFIG_FILE="${{ github.action_path }}/../../config/v${ZOWE_MAJOR_VERSION}.env"
+        CONFIG_FILE="${ACTION_PATH}/../../config/v${ZOWE_MAJOR_VERSION}.env"
         if [ ! -f "$CONFIG_FILE" ]; then
           echo "ERROR: No config file found at $CONFIG_FILE"
-          ls "${{ github.action_path }}/../../config"/*.env 2>/dev/null || echo "  (none)"
+          ls "${ACTION_PATH}/../../config"/*.env 2>/dev/null || echo "  (none)"
           exit 1
         fi
         sed '/^#/d' "$CONFIG_FILE" | awk NF >> $GITHUB_ENV
@@ -81,7 +103,7 @@ runs:
 
         # A release candidate builds the vX.x/rc branches. Written after the
         # config so these take precedence.
-        if [ "${{ inputs.rc }}" = "true" ]; then
+        if [ "$IN_RC" = "true" ]; then
           ZOWE_MANIFEST_BRANCH="v${ZOWE_MAJOR_VERSION}.x/rc"
           {
             echo "IS_RC=true"
@@ -91,8 +113,12 @@ runs:
           } >> $GITHUB_ENV
         fi
 
-        if [ -n "${{ inputs.release-version }}" ]; then
-          ZOWE_VERSION="${{ inputs.release-version }}"
+        if [ -n "$IN_RELEASE_VERSION" ]; then
+          if [[ ! "$IN_RELEASE_VERSION" =~ ^[0-9A-Za-z][0-9A-Za-z._+-]*$ ]]; then
+            echo "ERROR: Invalid release-version: $IN_RELEASE_VERSION"
+            exit 1
+          fi
+          ZOWE_VERSION="$IN_RELEASE_VERSION"
         else
           ZOWE_VERSION=$(curl -fsSL "https://raw.githubusercontent.com/zowe/zowe-install-packaging/${ZOWE_MANIFEST_BRANCH}/manifest.json.template" \
             | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s).version))")
@@ -105,23 +131,40 @@ runs:
         echo "ZOWE_MAJOR_VERSION=${ZOWE_MAJOR_VERSION}" >> $GITHUB_ENV
 
         echo "Building Zowe ${ZOWE_VERSION} (v${ZOWE_MAJOR_VERSION}) from ${CURRENT_BRANCH}"
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        IN_ZOWE_MAJOR_VERSION: ${{ inputs.zowe-major-version }}
+        IN_RC: ${{ inputs.rc }}
+        IN_RELEASE_VERSION: ${{ inputs.release-version }}
       shell: bash
     
     - name: 'export github username and email'
       run: |
-        if [ -n "${{ inputs.github-user }}" ]
+        # These values are written to $GITHUB_ENV, a newline would add extra variables
+        for v in "$IN_GITHUB_USER" "$IN_GITHUB_EMAIL" "$IN_GITHUB_PASSWORD"; do
+          if [[ "$v" == *$'\n'* || "$v" == *$'\r'* ]]; then
+            echo "ERROR: github-user, github-email and github-password must be single-line values"
+            exit 1
+          fi
+        done
+        if [ -n "$IN_GITHUB_USER" ]
         then
-          git config --global user.name ${{ inputs.github-user }}
-          echo GITHUB_USER=${{ inputs.github-user }} >> $GITHUB_ENV
+          git config --global user.name "$IN_GITHUB_USER"
+          echo "GITHUB_USER=$IN_GITHUB_USER" >> $GITHUB_ENV
         fi
-        if [ -n "${{ inputs.github-email }}" ]
+        if [ -n "$IN_GITHUB_EMAIL" ]
         then
-          git config --global user.email ${{ inputs.github-email }}
+          git config --global user.email "$IN_GITHUB_EMAIL"
         fi
-        if [ -n "${{ inputs.github-password }}" ]
+        if [ -n "$IN_GITHUB_PASSWORD" ]
         then
-          echo GITHUB_PASSWORD=${{ inputs.github-password }} >> $GITHUB_ENV
+          echo "GITHUB_PASSWORD=$IN_GITHUB_PASSWORD" >> $GITHUB_ENV
         fi
-        echo GITHUB_REPOSITORY=${{ github.repository }} >> $GITHUB_ENV
+        echo "GITHUB_REPOSITORY=$GH_REPOSITORY" >> $GITHUB_ENV
         echo DEPLOY_BRANCH=$CURRENT_BRANCH | sed -e 's+\/+\-+' >> $GITHUB_ENV
+      env:
+        IN_GITHUB_USER: ${{ inputs.github-user }}
+        IN_GITHUB_EMAIL: ${{ inputs.github-email }}
+        IN_GITHUB_PASSWORD: ${{ inputs.github-password }}
+        GH_REPOSITORY: ${{ github.repository }}
       shell: bash

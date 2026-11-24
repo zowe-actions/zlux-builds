@@ -27,6 +27,13 @@ runs:
   steps:
     - name: 'checkout'
       run: |
+        # PR numbers come from workflow inputs, accept digits only
+        for pr in "$PR_NUMBER" "$IN_ZLUX_APP_MANAGER" "$IN_ZLUX_APP_SERVER" "$IN_ZLUX_BUILD" "$IN_ZLUX_PLATFORM" "$IN_ZLUX_SERVER_FRAMEWORK" "$IN_ZLUX_SHARED"; do
+          if [[ -n "$pr" && ! "$pr" =~ ^[0-9]+$ ]]; then
+            echo "Invalid pull request number: $pr"
+            exit 1
+          fi
+        done
         mkdir zlux && cd zlux
         git clone https://github.com/zowe/zlux-app-manager.git -b $CURRENT_BRANCH
         git clone https://github.com/zowe/zlux-app-server.git -b $CURRENT_BRANCH
@@ -35,61 +42,69 @@ runs:
         git clone https://github.com/zowe/zlux-server-framework.git -b $CURRENT_BRANCH
         git clone https://github.com/zowe/zlux-shared.git -b $CURRENT_BRANCH
         
-        if [ -n "${{ github.event.pull_request.number }}" ]
+        if [ -n "$PR_NUMBER" ]
         then
           cd $REPOSITORY_NAME
-          git fetch origin pull/${{ github.event.pull_request.number }}/head:pr
+          git fetch origin pull/$PR_NUMBER/head:pr
           git merge pr 
           cd ..
         fi
-        if [ -n "${{ inputs.zlux-app-manager }}" ]
+        if [ -n "$IN_ZLUX_APP_MANAGER" ]
         then
           cd zlux-app-manager
-          git fetch origin pull/${{ inputs.zlux-app-manager }}/head:pr
+          git fetch origin pull/$IN_ZLUX_APP_MANAGER/head:pr
           git merge pr 
           cd ..
           echo CUSTOM_PR=true >> $GITHUB_ENV
         fi
-        if [ -n "${{ inputs.zlux-app-server }}" ]
+        if [ -n "$IN_ZLUX_APP_SERVER" ]
         then
           cd zlux-app-server
-          git fetch origin pull/${{ inputs.zlux-app-server }}/head:pr
+          git fetch origin pull/$IN_ZLUX_APP_SERVER/head:pr
           git merge pr
           cd ..
           echo CUSTOM_PR=true >> $GITHUB_ENV
         fi
-        if [ -n "${{ inputs.zlux-build }}" ]
+        if [ -n "$IN_ZLUX_BUILD" ]
         then
           cd zlux-build
-          git fetch origin pull/${{ inputs.zlux-build }}/head:pr
+          git fetch origin pull/$IN_ZLUX_BUILD/head:pr
           git merge pr
           cd ..
           echo CUSTOM_PR=true >> $GITHUB_ENV
         fi
-        if [ -n "${{ inputs.zlux-platform }}" ]
+        if [ -n "$IN_ZLUX_PLATFORM" ]
         then
           cd zlux-platform
-          git fetch origin pull/${{ inputs.zlux-platform }}/head:pr
+          git fetch origin pull/$IN_ZLUX_PLATFORM/head:pr
           git merge pr
           cd ..
           echo CUSTOM_PR=true >> $GITHUB_ENV
         fi
-        if [ -n "${{ inputs.zlux-server-framework }}" ]
+        if [ -n "$IN_ZLUX_SERVER_FRAMEWORK" ]
         then
           cd zlux-server-framework
-          git fetch origin pull/${{ inputs.zlux-server-framework }}/head:pr
+          git fetch origin pull/$IN_ZLUX_SERVER_FRAMEWORK/head:pr
           git merge pr
           cd ..
           echo CUSTOM_PR=true >> $GITHUB_ENV
         fi
-        if [ -n "${{ inputs.zlux-shared }}" ]
+        if [ -n "$IN_ZLUX_SHARED" ]
         then
           cd zlux-shared
-          git fetch origin pull/${{ inputs.zlux-shared }}/head:pr
+          git fetch origin pull/$IN_ZLUX_SHARED/head:pr
           git merge pr
           cd ..
           echo CUSTOM_PR=true >> $GITHUB_ENV
         fi
+      env:
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        IN_ZLUX_APP_MANAGER: ${{ inputs.zlux-app-manager }}
+        IN_ZLUX_APP_SERVER: ${{ inputs.zlux-app-server }}
+        IN_ZLUX_BUILD: ${{ inputs.zlux-build }}
+        IN_ZLUX_PLATFORM: ${{ inputs.zlux-platform }}
+        IN_ZLUX_SERVER_FRAMEWORK: ${{ inputs.zlux-server-framework }}
+        IN_ZLUX_SHARED: ${{ inputs.zlux-shared }}
       shell: bash    
         
     - name: 'set version'
@@ -157,7 +172,7 @@ runs:
 
     - name: 'test'
       run: |
-        if [[ -n "${{ github.event.pull_request.number }}" && "$REPOSITORY_NAME" != "zlux-app-server" ]]
+        if [[ -n "$PR_NUMBER" && "$REPOSITORY_NAME" != "zlux-app-server" ]]
         then
           cd dist
           packages=$(find ./${REPOSITORY_NAME} -name package.json | { grep -v node_modules || true; })
@@ -166,6 +181,8 @@ runs:
             sh -c "cd $(dirname $package) && npm run test --if-present"
           done
         fi
+      env:
+        PR_NUMBER: ${{ github.event.pull_request.number }}
       shell: bash 
       
     - name: 'remove source'
