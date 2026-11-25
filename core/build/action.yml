@@ -197,7 +197,7 @@ runs:
           | sed 's/[", ]//g' \
           | sed 's/\.pax$/.tar/')
         echo "Fetching v2 zlux-core ${ZLUX_CORE_V2_VERSION}/${ZLUX_CORE_PAX_V2}"
-        curl --fail "https://zowe.jfrog.io/zowe/list/libs-snapshot-local/org/zowe/zlux/zlux-core/${ZLUX_CORE_V2_VERSION}/${ZLUX_CORE_PAX_V2}" -L -k -o zlux.tar
+        curl --fail "https://zowe.jfrog.io/zowe/list/libs-snapshot-local/org/zowe/zlux/zlux-core/${ZLUX_CORE_V2_VERSION}/${ZLUX_CORE_PAX_V2}" -L -o zlux.tar
         tar xpoUf zlux.tar 
         cd zlux-app-manager/system-apps
         for app_folder in */
